@@ -49,6 +49,8 @@ const chartData = [
   { name: 'Sun', tickets: 8, alerts: 15 },
 ];
 
+import { firestoreService } from '../services/firestoreService';
+
 export function Dashboard() {
   const [stats, setStats] = React.useState<any>(null);
   const [alerts, setAlerts] = React.useState<Alert[]>([]);
@@ -56,25 +58,18 @@ export function Dashboard() {
   const { t } = useLanguage();
 
   React.useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsRes, alertsRes] = await Promise.all([
-          fetch('/api/stats'),
-          fetch('/api/alerts')
-        ]);
-        const statsData = await statsRes.json();
-        const alertsData = await alertsRes.json();
-        
-        setStats(statsData);
-        setAlerts(alertsData);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data", error);
-      } finally {
-        setLoading(false);
-      }
+    const fetchStats = async () => {
+      const data = await firestoreService.getDashboardStats();
+      if (data) setStats(data);
     };
 
-    fetchData();
+    const unsubscribeAlerts = firestoreService.subscribeToAlerts((data) => {
+      setAlerts(data);
+      setLoading(false);
+    });
+
+    fetchStats();
+    return () => unsubscribeAlerts();
   }, []);
 
   if (loading || !stats) {

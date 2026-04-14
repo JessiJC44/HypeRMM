@@ -9,8 +9,22 @@ import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 
+import { firestoreService } from '../services/firestoreService';
+
 export function Admin() {
   const [activeTab, setActiveTab] = React.useState('general');
+  const [users, setUsers] = React.useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = React.useState(true);
+
+  React.useEffect(() => {
+    if (activeTab === 'users') {
+      const unsubscribe = firestoreService.subscribeToUsers((data) => {
+        setUsers(data);
+        setLoadingUsers(false);
+      });
+      return () => unsubscribe();
+    }
+  }, [activeTab]);
 
   const tabs = [
     { id: 'general', label: 'General Settings', icon: Settings },
@@ -217,24 +231,34 @@ export function Admin() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y divide-border">
-                  {[
-                    { name: 'John Doe', email: 'john@hyperemote.com', role: 'Admin' },
-                    { name: 'Jane Smith', email: 'jane@hyperemote.com', role: 'Technician' },
-                    { name: 'Mike Ross', email: 'mike@hyperemote.com', role: 'Viewer' },
-                  ].map((user) => (
-                    <div key={user.email} className="p-6 flex items-center justify-between hover:bg-muted/20 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center font-black text-sm">
-                          {user.name.charAt(0)}
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-black text-foreground">{user.name}</h4>
-                          <p className="text-xs text-muted-foreground font-bold">{user.email}</p>
-                        </div>
-                      </div>
-                      <Badge variant="outline" className="rounded-full text-[10px] font-black uppercase tracking-widest border-border text-muted-foreground">{user.role}</Badge>
+                  {loadingUsers ? (
+                    <div className="p-8 text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
                     </div>
-                  ))}
+                  ) : users.length === 0 ? (
+                    <div className="p-8 text-center text-muted-foreground font-bold uppercase tracking-widest">
+                      No users found.
+                    </div>
+                  ) : (
+                    users.map((user) => (
+                      <div key={user.uid || user.id} className="p-6 flex items-center justify-between hover:bg-muted/20 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center font-black text-sm overflow-hidden">
+                            {user.photoURL ? (
+                              <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              (user.displayName || user.email || '?').charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-black text-foreground">{user.displayName || 'Unnamed User'}</h4>
+                            <p className="text-xs text-muted-foreground font-bold">{user.email}</p>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="rounded-full text-[10px] font-black uppercase tracking-widest border-border text-muted-foreground">{user.role || 'user'}</Badge>
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -31,6 +31,76 @@
         "splashtopId": { "type": "string" }
       },
       "required": ["name", "type", "status"]
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "Support ticket information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "customer": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "pending", "resolved", "closed"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "assignedTo": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "customer", "status", "priority"]
+    },
+    "Alert": {
+      "title": "Alert",
+      "description": "System alert information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "deviceName": { "type": "string" },
+        "message": { "type": "string" },
+        "severity": { "type": "string", "enum": ["info", "warning", "critical"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["message", "severity", "timestamp"]
+    },
+    "Site": {
+      "title": "Site",
+      "description": "Customer site information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "contactName": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "deviceCount": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["name"]
+    },
+    "Software": {
+      "title": "Software",
+      "description": "Software inventory item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "publisher": { "type": "string" },
+        "installCount": { "type": "number" }
+      },
+      "required": ["name", "version"]
+    },
+    "Patch": {
+      "title": "Patch",
+      "description": "Software patch information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "status": { "type": "string", "enum": ["pending", "installed", "failed"] },
+        "releaseDate": { "type": "string", "format": "date" }
+      },
+      "required": ["name", "severity", "status"]
     }
   },
   "firestore": {
@@ -41,6 +111,26 @@
     "/devices/{deviceId}": {
       "schema": "Device",
       "description": "Managed devices"
+    },
+    "/tickets/{ticketId}": {
+      "schema": "Ticket",
+      "description": "Support tickets"
+    },
+    "/alerts/{alertId}": {
+      "schema": "Alert",
+      "description": "System alerts"
+    },
+    "/sites/{siteId}": {
+      "schema": "Site",
+      "description": "Customer sites"
+    },
+    "/software/{softwareId}": {
+      "schema": "Software",
+      "description": "Software inventory"
+    },
+    "/patches/{patchId}": {
+      "schema": "Patch",
+      "description": "Software patches"
     }
   }
 }

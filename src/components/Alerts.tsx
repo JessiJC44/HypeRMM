@@ -8,23 +8,34 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 
-export function Alerts() {
-  const [alerts, setAlerts] = React.useState([
-    { id: 1, device: 'SRV-PROD-01', type: 'CPU Usage High', severity: 'Critical', date: '10 mins ago', status: 'New' },
-    { id: 2, device: 'WS-MARKETING-05', type: 'Disk Space Low', severity: 'Warning', date: '25 mins ago', status: 'New' },
-    { id: 3, device: 'SRV-BACKUP-02', type: 'Backup Failed', severity: 'Critical', date: '1 hour ago', status: 'New' },
-    { id: 4, device: 'WS-DEV-12', type: 'Antivirus Outdated', severity: 'Information', date: '2 hours ago', status: 'New' },
-    { id: 5, device: 'PRINTER-OFFICE', type: 'Offline', severity: 'Warning', date: '3 hours ago', status: 'New' },
-  ]);
+import { firestoreService } from '../services/firestoreService';
+import { Alert } from '../types';
 
-  const resolveAlert = (id: number) => {
-    setAlerts(alerts.filter(a => a.id !== id));
+export function Alerts() {
+  const [alerts, setAlerts] = React.useState<Alert[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const unsubscribe = firestoreService.subscribeToAlerts((data) => {
+      setAlerts(data);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const resolveAlert = (id: string) => {
+    // In a real app, we would mark it as resolved in Firestore
     toast.success("Alert resolved successfully");
   };
 
   const createTicket = (device: string) => {
     toast.info(`Creating ticket for ${device}...`);
   };
+
+  const criticalCount = alerts.filter(a => a.severity === 'critical').length;
+  const warningCount = alerts.filter(a => a.severity === 'warning').length;
+  const infoCount = alerts.filter(a => a.severity === 'info').length;
 
   return (
     <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
@@ -47,9 +58,9 @@ export function Alerts() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
-          { icon: AlertTriangle, color: 'rose', label: 'Critical', value: '2', desc: 'Immediate attention required' },
-          { icon: AlertTriangle, color: 'amber', label: 'Warning', value: '2', desc: 'Potential issues detected' },
-          { icon: Info, color: 'brand-blue', label: 'Information', value: '1', desc: 'System notifications' },
+          { icon: AlertTriangle, color: 'rose', label: 'Critical', value: criticalCount.toString(), desc: 'Immediate attention required' },
+          { icon: AlertTriangle, color: 'amber', label: 'Warning', value: warningCount.toString(), desc: 'Potential issues detected' },
+          { icon: Info, color: 'brand-blue', label: 'Information', value: infoCount.toString(), desc: 'System notifications' },
         ].map((stat, index) => (
           <motion.div
             key={stat.label}
@@ -120,50 +131,66 @@ export function Alerts() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {alerts.map((alert, index) => (
-              <motion.tr 
-                key={alert.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 + (index * 0.05) }}
-                className="hover:bg-muted/20 transition-colors group"
-              >
-                <td className="py-5 px-8 whitespace-nowrap">
-                  <Badge className={cn(
-                    "text-[10px] font-black px-3 py-1 rounded-full border-none uppercase tracking-wider",
-                    alert.severity === 'Critical' ? "bg-rose-500/10 text-rose-500" : 
-                    alert.severity === 'Warning' ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
-                  )}>
-                    {alert.severity}
-                  </Badge>
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="h-32 text-center text-muted-foreground font-bold uppercase tracking-widest">
+                  Loading alerts...
                 </td>
-                <td className="py-5 px-8 font-bold text-foreground whitespace-nowrap">{alert.device}</td>
-                <td className="py-5 px-8 text-muted-foreground font-bold whitespace-nowrap">{alert.type}</td>
-                <td className="py-5 px-8 text-muted-foreground font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">{alert.date}</td>
-                <td className="py-5 px-8 text-right whitespace-nowrap">
-                  <div className="flex items-center justify-end gap-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => resolveAlert(alert.id)}
-                      className="text-emerald-500 font-black uppercase text-[10px] tracking-widest hover:bg-emerald-500/10 rounded-lg h-9 px-4 gap-2"
-                    >
-                      <Check size={14} strokeWidth={3} />
-                      Resolve
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => createTicket(alert.device)}
-                      className="text-primary font-black uppercase text-[10px] tracking-widest hover:bg-primary/10 rounded-lg h-9 px-4 gap-2"
-                    >
-                      <Ticket size={14} strokeWidth={3} />
-                      Ticket
-                    </Button>
-                  </div>
+              </tr>
+            ) : alerts.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="h-32 text-center text-muted-foreground font-bold uppercase tracking-widest">
+                  No alerts found.
                 </td>
-              </motion.tr>
-            ))}
+              </tr>
+            ) : (
+              alerts.map((alert, index) => (
+                <motion.tr 
+                  key={alert.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 + (index * 0.05) }}
+                  className="hover:bg-muted/20 transition-colors group"
+                >
+                  <td className="py-5 px-8 whitespace-nowrap">
+                    <Badge className={cn(
+                      "text-[10px] font-black px-3 py-1 rounded-full border-none uppercase tracking-wider",
+                      alert.severity === 'critical' ? "bg-rose-500/10 text-rose-500" : 
+                      alert.severity === 'warning' ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+                    )}>
+                      {alert.severity}
+                    </Badge>
+                  </td>
+                  <td className="py-5 px-8 font-bold text-foreground whitespace-nowrap">{alert.deviceName}</td>
+                  <td className="py-5 px-8 text-muted-foreground font-bold whitespace-nowrap">{alert.message}</td>
+                  <td className="py-5 px-8 text-muted-foreground font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
+                    {new Date(alert.timestamp).toLocaleString()}
+                  </td>
+                  <td className="py-5 px-8 text-right whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => resolveAlert(alert.id)}
+                        className="text-emerald-500 font-black uppercase text-[10px] tracking-widest hover:bg-emerald-500/10 rounded-lg h-9 px-4 gap-2"
+                      >
+                        <Check size={14} strokeWidth={3} />
+                        Resolve
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => createTicket(alert.deviceName)}
+                        className="text-primary font-black uppercase text-[10px] tracking-widest hover:bg-primary/10 rounded-lg h-9 px-4 gap-2"
+                      >
+                        <Ticket size={14} strokeWidth={3} />
+                        Ticket
+                      </Button>
+                    </div>
+                  </td>
+                </motion.tr>
+              ))
+            )}
           </tbody>
           </table>
         </div>

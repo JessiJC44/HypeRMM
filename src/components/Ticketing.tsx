@@ -39,6 +39,8 @@ import {
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 
+import { firestoreService } from '../services/firestoreService';
+
 export function Ticketing() {
   const [tickets, setTickets] = React.useState<Ticket[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -46,47 +48,34 @@ export function Ticketing() {
   const [newTicket, setNewTicket] = React.useState({
     title: '',
     customer: '',
-    priority: 'medium',
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'critical',
     assignedTo: 'John Doe'
   });
 
-  const fetchTickets = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/tickets');
-      const data = await res.json();
-      setTickets(data);
-    } catch (error) {
-      console.error("Failed to fetch tickets", error);
-      toast.error("Failed to load tickets");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   React.useEffect(() => {
-    fetchTickets();
+    const unsubscribe = firestoreService.subscribeToTickets((data) => {
+      setTickets(data);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleAddTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/tickets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newTicket)
+      await firestoreService.addTicket({
+        ...newTicket,
+        status: 'open'
       });
-      if (res.ok) {
-        toast.success("Ticket created successfully");
-        setIsAddDialogOpen(false);
-        setNewTicket({
-          title: '',
-          customer: '',
-          priority: 'medium',
-          assignedTo: 'John Doe'
-        });
-        fetchTickets();
-      }
+      toast.success("Ticket created successfully");
+      setIsAddDialogOpen(false);
+      setNewTicket({
+        title: '',
+        customer: '',
+        priority: 'medium',
+        assignedTo: 'John Doe'
+      });
     } catch (error) {
       toast.error("Failed to create ticket");
     }

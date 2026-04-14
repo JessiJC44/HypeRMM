@@ -72,6 +72,8 @@ import {
 } from '@/components/ui/tooltip';
 import { AgentConsole } from './AgentConsole';
 
+import { firestoreService } from '../services/firestoreService';
+
 export function Devices() {
   const [devices, setDevices] = React.useState<Device[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -81,7 +83,7 @@ export function Devices() {
   const [installMode, setInstallMode] = React.useState<'download' | 'command' | 'link'>('download');
   const [newDevice, setNewDevice] = React.useState({
     name: '',
-    type: 'workstation',
+    type: 'workstation' as const,
     os: 'Windows',
     arch: 'x64',
     customer: '',
@@ -89,70 +91,40 @@ export function Devices() {
     anydeskId: '',
     splashtopId: ''
   });
-
-  const [customerSearch, setCustomerSearch] = React.useState('');
-  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = React.useState(false);
   const [remoteTool, setRemoteTool] = React.useState<'splashtop' | 'anydesk'>('splashtop');
-
-  const REMOTE_LOGOS = {
-    splashtop: "https://upload.wikimedia.org/wikipedia/en/thumb/5/5e/Splashtop_Logo.svg/200px-Splashtop_Logo.svg.png",
-    anydesk: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/AnyDesk_Logo.svg/200px-AnyDesk_Logo.svg.png"
-  };
-
-  const customers = ['Pescespada Island', 'Acme Corp', 'Global Logistics', 'Nexus IT', 'Tech Solutions', 'Starlight Inc', 'Enterprise Alpha', 'Beta Systems', 'Gamma Solutions', 'Delta Services'];
-
   const [filterQuery, setFilterQuery] = React.useState('');
 
-  const handleAIFilter = () => {
-    if (!filterQuery.trim()) {
-      toast.info("Décrivez ce que vous cherchez (ex: 'serveurs hors ligne')");
-      return;
-    }
-    toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 1500)),
-      {
-        loading: 'Analyse IA en cours...',
-        success: `Filtre IA appliqué pour: "${filterQuery}"`,
-        error: 'Erreur lors de l\'analyse IA',
-      }
-    );
+  const REMOTE_LOGOS = {
+    splashtop: 'https://www.splashtop.com/wp-content/uploads/splashtop-logo-icon.png',
+    anydesk: 'https://anydesk.com/_static/img/logos/anydesk-logo-icon.png'
   };
 
-  const fetchDevices = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/devices');
-      const data = await res.json();
-      setDevices(data);
-    } catch (error) {
-      console.error("Failed to fetch devices", error);
-      toast.error("Failed to load devices");
-    } finally {
-      setLoading(false);
-    }
+  const customers = ['Client A', 'Client B', 'Client C', 'Discovered'];
+
+  const handleAIFilter = () => {
+    toast.info(`AI Filtering for: ${filterQuery}`);
+    // In a real app, this would call an AI service to filter the devices list
   };
 
   React.useEffect(() => {
-    fetchDevices();
+    const unsubscribe = firestoreService.subscribeToDevices((data) => {
+      setDevices(data);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleAddAgent = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     try {
-      const res = await fetch('/api/devices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newDevice,
-          lastSeen: new Date().toISOString(),
-          status: 'online',
-          splashtopId: 'ST-' + Math.random().toString(36).substring(2, 8).toUpperCase()
-        })
+      await firestoreService.addDevice({
+        ...newDevice,
+        type: newDevice.type as any,
+        status: 'online',
+        splashtopId: 'ST-' + Math.random().toString(36).substring(2, 8).toUpperCase()
       });
-      if (res.ok) {
-        setInstallStep(5);
-        fetchDevices();
-      }
+      setInstallStep(5);
     } catch (error) {
       toast.error("Failed to register agent");
     }

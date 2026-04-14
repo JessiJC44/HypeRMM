@@ -6,13 +6,30 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { motion } from 'motion/react';
 
+import { firestoreService } from '../services/firestoreService';
+import { toast } from 'sonner';
+
 export function Sites() {
-  const sites = [
-    { name: 'Main Office', customer: 'Acme Corp', location: 'New York, NY', devices: 45, users: 120, status: 'Healthy', icon: Building2 },
-    { name: 'Branch Office', customer: 'Acme Corp', location: 'London, UK', devices: 12, users: 35, status: 'Warning', icon: Building },
-    { name: 'HQ', customer: 'Global Tech', location: 'San Francisco, CA', devices: 89, users: 450, status: 'Healthy', icon: Landmark },
-    { name: 'Data Center', customer: 'Global Tech', location: 'Austin, TX', devices: 156, users: 5, status: 'Healthy', icon: Server },
-  ];
+  const [sites, setSites] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const unsubscribe = firestoreService.subscribeToSites((data) => {
+      setSites(data);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'hq': return Landmark;
+      case 'branch': return Building;
+      case 'datacenter': return Server;
+      default: return Building2;
+    }
+  };
 
   return (
     <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
@@ -25,7 +42,21 @@ export function Sites() {
           <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Sites & Customers</h1>
           <p className="text-sm text-muted-foreground">Manage your customer organizations and their physical locations.</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 gap-2 w-full sm:w-auto">
+        <Button 
+          onClick={() => {
+            firestoreService.addSite({
+              name: 'New Site ' + (sites.length + 1),
+              customer: 'New Customer',
+              location: 'Remote',
+              devices: 0,
+              users: 0,
+              status: 'Healthy',
+              type: 'office'
+            });
+            toast.success("Site added successfully");
+          }}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 gap-2 w-full sm:w-auto"
+        >
           <Plus size={18} />
           Add New Site
         </Button>
@@ -48,63 +79,76 @@ export function Sites() {
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {sites.map((site, index) => (
-          <motion.div
-            key={site.name}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 * index }}
-            whileHover={{ y: -4 }}
-          >
-            <Card className="border-none shadow-sm hover:shadow-md transition-shadow group rounded-2xl overflow-hidden bg-card h-full">
-            <CardContent className="p-6">
-              <div className="flex justify-between items-start mb-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-primary/10 rounded-2xl text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                    <site.icon size={24} />
+        {loading ? (
+          <div className="col-span-2 h-40 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : sites.length === 0 ? (
+          <div className="col-span-2 h-40 flex items-center justify-center text-muted-foreground font-bold uppercase tracking-widest">
+            No sites found.
+          </div>
+        ) : (
+          sites.map((site, index) => {
+            const Icon = getIcon(site.type);
+            return (
+              <motion.div
+                key={site.id}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.1 * index }}
+                whileHover={{ y: -4 }}
+              >
+                <Card className="border-none shadow-sm hover:shadow-md transition-shadow group rounded-2xl overflow-hidden bg-card h-full">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-primary/10 rounded-2xl text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                        <Icon size={24} />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-foreground">{site.name}</h3>
+                        <p className="text-sm text-muted-foreground font-medium">{site.customer}</p>
+                      </div>
+                    </div>
+                    <Badge className={cn(
+                      "text-[10px] font-bold border-none px-3 py-1 rounded-full",
+                      site.status === 'Healthy' ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
+                    )}>
+                      {site.status}
+                    </Badge>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-foreground">{site.name}</h3>
-                    <p className="text-sm text-muted-foreground font-medium">{site.customer}</p>
+
+                  <div className="grid grid-cols-3 gap-4 py-4 border-y border-border">
+                    <div className="text-center">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Devices</p>
+                      <p className="text-lg font-bold text-foreground">{site.devices}</p>
+                    </div>
+                    <div className="text-center border-x border-border">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Users</p>
+                      <p className="text-lg font-bold text-foreground">{site.users}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">SLA</p>
+                      <p className="text-lg font-bold text-emerald-500">99.9%</p>
+                    </div>
                   </div>
-                </div>
-                <Badge className={cn(
-                  "text-[10px] font-bold border-none px-3 py-1 rounded-full",
-                  site.status === 'Healthy' ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
-                )}>
-                  {site.status}
-                </Badge>
-              </div>
 
-              <div className="grid grid-cols-3 gap-4 py-4 border-y border-border">
-                <div className="text-center">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Devices</p>
-                  <p className="text-lg font-bold text-foreground">{site.devices}</p>
-                </div>
-                <div className="text-center border-x border-border">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Users</p>
-                  <p className="text-lg font-bold text-foreground">{site.users}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">SLA</p>
-                  <p className="text-lg font-bold text-emerald-500">99.9%</p>
-                </div>
-              </div>
-
-              <div className="mt-6 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <MapPin size={14} />
-                  <span className="text-xs font-medium">{site.location}</span>
-                </div>
-                <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10">
-                  View Details
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      ))}
-    </div>
+                  <div className="mt-6 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin size={14} />
+                      <span className="text-xs font-medium">{site.location}</span>
+                    </div>
+                    <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10">
+                      View Details
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

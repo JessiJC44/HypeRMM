@@ -7,7 +7,21 @@ import { Input } from '@/components/ui/input';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 
+import { firestoreService } from '../services/firestoreService';
+
 export function SoftwareInventory() {
+  const [software, setSoftware] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const unsubscribe = firestoreService.subscribeToSoftware((data) => {
+      setSoftware(data);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   return (
     <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
       <motion.div 
@@ -27,7 +41,7 @@ export function SoftwareInventory() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
-          { label: 'Total Applications', value: '1,248', desc: 'Across 156 devices', color: 'brand-blue' },
+          { label: 'Total Applications', value: software.length.toString(), desc: 'Across managed devices', color: 'brand-blue' },
           { label: 'Security Risks', value: '12', desc: 'Vulnerable versions found', color: 'rose', icon: ShieldCheck },
           { label: 'License Compliance', value: '98%', desc: 'Optimal', color: 'brand-green' },
         ].map((stat, index) => (
@@ -91,35 +105,42 @@ export function SoftwareInventory() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {[
-                { name: 'Google Chrome', publisher: 'Google LLC', version: '118.0.5993.70', count: 142 },
-                { name: 'Microsoft Office 365', publisher: 'Microsoft Corporation', version: '16.0.16827.20130', count: 128 },
-                { name: 'Slack', publisher: 'Slack Technologies', version: '4.34.121', count: 86 },
-                { name: 'Visual Studio Code', publisher: 'Microsoft Corporation', version: '1.83.1', count: 45 },
-                { name: 'Zoom', publisher: 'Zoom Video Communications', version: '5.16.2', count: 92 },
-                { name: 'Adobe Acrobat Reader', publisher: 'Adobe Inc.', version: '23.006.20360', count: 110 },
-              ].map((sw, i) => (
-                <motion.tr 
-                  key={i}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 + (i * 0.05) }}
-                  className="hover:bg-muted/20 transition-colors"
-                >
-                  <td className="py-4 px-6 font-black text-foreground whitespace-nowrap">{sw.name}</td>
-                  <td className="py-4 px-6 text-muted-foreground font-bold whitespace-nowrap">{sw.publisher}</td>
-                  <td className="py-4 px-6 text-muted-foreground font-bold whitespace-nowrap">{sw.version}</td>
-                  <td className="py-4 px-6 whitespace-nowrap">
-                    <Badge variant="secondary" className="bg-brand-blue/10 text-brand-blue border-none text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-3 py-1 rounded-full">{sw.count} devices</Badge>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
                   </td>
-                  <td className="py-4 px-6 text-right whitespace-nowrap">
-                    <Button variant="ghost" size="sm" className="text-brand-blue font-black uppercase text-[10px] tracking-widest hover:bg-brand-blue/5 gap-2 whitespace-nowrap h-9 px-4 rounded-xl">
-                      <ExternalLink size={14} />
-                      View Devices
-                    </Button>
+                </tr>
+              ) : software.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-muted-foreground font-bold uppercase tracking-widest">
+                    No software found.
                   </td>
-                </motion.tr>
-              ))}
+                </tr>
+              ) : (
+                software.map((sw, i) => (
+                  <motion.tr 
+                    key={sw.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 + (i * 0.05) }}
+                    className="hover:bg-muted/20 transition-colors"
+                  >
+                    <td className="py-4 px-6 font-black text-foreground whitespace-nowrap">{sw.name}</td>
+                    <td className="py-4 px-6 text-muted-foreground font-bold whitespace-nowrap">{sw.publisher}</td>
+                    <td className="py-4 px-6 text-muted-foreground font-bold whitespace-nowrap">{sw.version}</td>
+                    <td className="py-4 px-6 whitespace-nowrap">
+                      <Badge variant="secondary" className="bg-brand-blue/10 text-brand-blue border-none text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-3 py-1 rounded-full">{sw.installCount || 0} devices</Badge>
+                    </td>
+                    <td className="py-4 px-6 text-right whitespace-nowrap">
+                      <Button variant="ghost" size="sm" className="text-brand-blue font-black uppercase text-[10px] tracking-widest hover:bg-brand-blue/5 gap-2 whitespace-nowrap h-9 px-4 rounded-xl">
+                        <ExternalLink size={14} />
+                        View Devices
+                      </Button>
+                    </td>
+                  </motion.tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

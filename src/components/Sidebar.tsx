@@ -31,6 +31,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { auth } from '@/src/lib/firebase';
 import { User as FirebaseUser } from 'firebase/auth';
 
+import { firestoreService } from '../services/firestoreService';
+
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -45,21 +47,11 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, onClose, user }: Side
   const { t } = useLanguage();
 
   React.useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await fetch('/api/stats');
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        const data = await res.json();
-        setAlertCount(data.activeAlerts || 0);
-      } catch (error) {
-        if (error instanceof Error && error.message !== 'Failed to fetch') {
-          console.error("Failed to fetch sidebar stats", error);
-        }
-      }
-    };
-    fetchStats();
-    const interval = setInterval(fetchStats, 30000);
-    return () => clearInterval(interval);
+    const unsubscribe = firestoreService.subscribeToAlerts((alerts) => {
+      const activeAlerts = alerts.filter(a => a.status === 'active').length;
+      setAlertCount(activeAlerts);
+    });
+    return () => unsubscribe();
   }, []);
 
   const menuItems = [

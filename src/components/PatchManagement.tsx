@@ -8,7 +8,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 
+import { firestoreService } from '../services/firestoreService';
+
 export function PatchManagement() {
+  const [patches, setPatches] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const unsubscribe = firestoreService.subscribeToPatches((data) => {
+      setPatches(data);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const criticalCount = patches.filter(p => p.severity === 'critical').length;
+  const securityCount = patches.filter(p => p.severity === 'security' || p.severity === 'moderate').length;
+
   return (
     <div className="p-8 space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
       <motion.div 
@@ -31,8 +48,8 @@ export function PatchManagement() {
 
       <div className="grid grid-cols-4 gap-6">
         {[
-          { label: 'Critical Patches', value: '14', desc: 'Action required on 8 devices', color: 'rose' },
-          { label: 'Security Patches', value: '42', desc: 'Action required on 15 devices', color: 'amber' },
+          { label: 'Critical Patches', value: criticalCount.toString(), desc: 'Immediate attention required', color: 'rose' },
+          { label: 'Security Patches', value: securityCount.toString(), desc: 'Action required on devices', color: 'amber' },
           { label: 'Fully Patched', value: '112', desc: '72% of total fleet', color: 'emerald' },
           { label: 'Pending Reboot', value: '5', desc: 'Scheduled for tonight', color: 'blue' },
         ].map((stat, index) => (
@@ -112,36 +129,45 @@ export function PatchManagement() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {[
-                      { id: 'KB5031354', title: 'Windows 11 Security Update (22H2)', severity: 'Critical', devices: 12 },
-                      { id: 'KB5031455', title: 'Cumulative Update for .NET Framework', severity: 'Moderate', devices: 24 },
-                      { id: 'KB5029351', title: 'Security Update for Windows Server 2022', severity: 'Critical', devices: 5 },
-                      { id: 'KB5030219', title: 'Windows Malicious Software Removal Tool', severity: 'Low', devices: 86 },
-                    ].map((patch, i) => (
-                      <motion.tr 
-                        key={i}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.5 + (i * 0.05) }}
-                        className="hover:bg-muted/20 transition-colors"
-                      >
-                        <td className="py-4 px-6 font-mono text-xs font-bold text-primary whitespace-nowrap">{patch.id}</td>
-                        <td className="py-4 px-6 font-bold text-foreground whitespace-nowrap">{patch.title}</td>
-                        <td className="py-4 px-6 whitespace-nowrap">
-                          <Badge className={cn(
-                            "text-[10px] font-bold border-none",
-                            patch.severity === 'Critical' ? "bg-rose-500/10 text-rose-500" : 
-                            patch.severity === 'Moderate' ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
-                          )}>
-                            {patch.severity}
-                          </Badge>
+                    {loading ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
                         </td>
-                        <td className="py-4 px-6 text-muted-foreground font-medium whitespace-nowrap">{patch.devices} devices</td>
-                        <td className="py-4 px-6 text-right whitespace-nowrap">
-                          <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10">Approve</Button>
+                      </tr>
+                    ) : patches.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-muted-foreground font-bold uppercase tracking-widest">
+                          No patches found.
                         </td>
-                      </motion.tr>
-                    ))}
+                      </tr>
+                    ) : (
+                      patches.map((patch, i) => (
+                        <motion.tr 
+                          key={patch.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.5 + (i * 0.05) }}
+                          className="hover:bg-muted/20 transition-colors"
+                        >
+                          <td className="py-4 px-6 font-mono text-xs font-bold text-primary whitespace-nowrap">{patch.kbId || patch.id}</td>
+                          <td className="py-4 px-6 font-bold text-foreground whitespace-nowrap">{patch.title}</td>
+                          <td className="py-4 px-6 whitespace-nowrap">
+                            <Badge className={cn(
+                              "text-[10px] font-bold border-none",
+                              patch.severity === 'critical' ? "bg-rose-500/10 text-rose-500" : 
+                              patch.severity === 'moderate' || patch.severity === 'security' ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+                            )}>
+                              {patch.severity}
+                            </Badge>
+                          </td>
+                          <td className="py-4 px-6 text-muted-foreground font-medium whitespace-nowrap">{patch.deviceCount || 0} devices</td>
+                          <td className="py-4 px-6 text-right whitespace-nowrap">
+                            <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10">Approve</Button>
+                          </td>
+                        </motion.tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

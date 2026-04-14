@@ -7,12 +7,37 @@ import { Input } from '@/components/ui/input';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 
+import { firestoreService } from '../services/firestoreService';
+import { toast } from 'sonner';
+
 export function NetworkDiscovery() {
   const [isScanning, setIsScanning] = React.useState(false);
 
-  const startScan = () => {
+  const startScan = async () => {
     setIsScanning(true);
-    setTimeout(() => setIsScanning(false), 3000);
+    toast.info("Scanning network for new devices...");
+    
+    // Simulate scan time
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    setIsScanning(false);
+    toast.success("Scan complete! Found 1 new device.");
+  };
+
+  const installAgent = async (name: string, ip: string) => {
+    try {
+      await firestoreService.addDevice({
+        name,
+        ip,
+        type: 'workstation',
+        os: 'Windows 11 Pro',
+        customer: 'Discovered',
+        status: 'online'
+      });
+      toast.success(`Agent installed successfully on ${name}`);
+    } catch (error) {
+      toast.error("Failed to install agent");
+    }
   };
 
   return (
@@ -38,9 +63,9 @@ export function NetworkDiscovery() {
 
       <div className="grid grid-cols-3 gap-6">
         {[
-          { icon: CheckCircle2, label: 'Discovered Devices', value: '24', desc: '12 ready for agent install', color: 'emerald' },
+          { icon: CheckCircle2, label: 'Discovered Devices', value: '5', desc: 'Ready for agent install', color: 'emerald' },
           { icon: Shield, label: 'Managed Devices', value: '156', desc: '86% coverage', color: 'blue' },
-          { icon: AlertCircle, label: 'Security Risks', value: '3', desc: 'Unrecognized devices found', color: 'rose' },
+          { icon: AlertCircle, label: 'Security Risks', value: '1', desc: 'Unrecognized devices found', color: 'rose' },
         ].map((stat, index) => (
           <motion.div
             key={stat.label}
@@ -112,7 +137,12 @@ export function NetworkDiscovery() {
                   </td>
                   <td className="py-4 px-6 text-muted-foreground font-medium whitespace-nowrap">{device.mfg}</td>
                   <td className="py-4 px-6 text-right whitespace-nowrap">
-                    <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10 gap-2">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => installAgent(device.name, device.ip)}
+                      className="text-primary font-bold hover:bg-primary/10 gap-2"
+                    >
                       <Plus size={14} />
                       Install Agent
                     </Button>
