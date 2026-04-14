@@ -19,21 +19,27 @@ import {
   Package,
   Activity,
   X,
-  Sparkles
+  Sparkles,
+  LogOut,
+  Menu,
+  HelpCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from './Logo';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useLanguage } from '../contexts/LanguageContext';
+import { auth } from '@/src/lib/firebase';
+import { User as FirebaseUser } from 'firebase/auth';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   isOpen?: boolean;
   onClose?: () => void;
+  user?: FirebaseUser | null;
 }
 
-export function Sidebar({ activeTab, setActiveTab, isOpen, onClose }: SidebarProps) {
+export function Sidebar({ activeTab, setActiveTab, isOpen, onClose, user }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [alertCount, setAlertCount] = React.useState(0);
   const { t } = useLanguage();
@@ -46,14 +52,13 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, onClose }: SidebarPro
         const data = await res.json();
         setAlertCount(data.activeAlerts || 0);
       } catch (error) {
-        // Only log if it's not a transient network error during dev reload
         if (error instanceof Error && error.message !== 'Failed to fetch') {
           console.error("Failed to fetch sidebar stats", error);
         }
       }
     };
     fetchStats();
-    const interval = setInterval(fetchStats, 30000); // Refresh every 30s
+    const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -62,7 +67,7 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, onClose }: SidebarPro
     { id: 'tickets', label: t('nav.tickets'), icon: Ticket, description: 'Gérer et suivre les demandes de support informatique.' },
     { id: 'sites', label: t('nav.sites'), icon: Globe, description: 'Gérer les organisations clients et les emplacements.' },
     { id: 'assets', label: t('nav.assets'), icon: Monitor, description: 'Inventaire et gestion à distance de tous les terminaux.' },
-    { id: 'alerts', label: t('nav.alerts'), icon: Bell, description: 'Notifications en temps réel des événements système critiques.' },
+    { id: 'alerts', label: t('nav.alerts'), icon: Bell, description: 'Notifications en temps réel des événements système critiques.', badge: alertCount > 0 ? alertCount.toString() : undefined },
     { id: 'patches', label: t('nav.patches'), icon: ShieldCheck, description: 'Mises à jour automatisées du système d\'exploitation et des logiciels tiers.' },
     { id: 'software', label: t('nav.software'), icon: Package, description: 'Suivre les logiciels installés et la conformité des licences.' },
     { id: 'app-center', label: t('nav.app-center'), icon: AppWindow, description: 'Intégrations et place de marché pour les outils tiers.' },
@@ -75,90 +80,207 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, onClose }: SidebarPro
     { id: 'admin', label: t('nav.admin'), icon: Lock, description: 'Paramètres globaux de la plateforme et permissions des utilisateurs.' },
   ];
 
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
+  const toggleCollapse = () => setIsCollapsed(!isCollapsed);
+
   return (
-    <div className={cn(
-      "bg-brand-navy text-white transition-all duration-300 ease-in-out min-h-screen fixed lg:relative z-50",
-      isCollapsed ? "w-20" : "w-64",
-      isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-    )}>
-      <div className="flex flex-col h-screen lg:sticky lg:top-0">
-        <div className="flex h-16 lg:h-20 items-center px-4 mb-4 justify-between">
+    <>
+      {/* Mobile hamburger button - handled in App.tsx but we can keep it here if needed */}
+      
+      {/* Sidebar container */}
+      <div
+        className={cn(
+          "fixed top-0 left-0 h-full bg-card border-r border-border z-40 transition-all duration-300 ease-in-out flex flex-col",
+          isOpen ? "translate-x-0" : "-translate-x-full",
+          isCollapsed ? "w-20" : "w-64",
+          "lg:translate-x-0 lg:static lg:z-auto"
+        )}
+      >
+        {/* Header with logo and collapse button */}
+        <div className="flex items-center justify-between p-5 border-b border-border bg-muted/30 h-20">
           <Logo collapsed={isCollapsed} />
+          
+          {/* Desktop collapse button */}
+          <button
+            onClick={toggleCollapse}
+            className="hidden lg:flex p-1.5 rounded-md hover:bg-accent transition-all duration-200 text-muted-foreground"
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </button>
+
+          {/* Mobile close button */}
           <button 
             onClick={onClose}
-            className="lg:hidden p-2 hover:bg-white/10 rounded-lg text-white"
+            className="lg:hidden p-2 hover:bg-accent rounded-lg text-muted-foreground"
           >
             <X size={20} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-2">
-          <nav className="grid gap-1 px-2">
-            {menuItems.map((item) => (
-              <Tooltip key={item.id} delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <button
-                    className={cn(
-                      "flex items-center gap-3 h-11 transition-all rounded-xl relative group w-full",
-                      activeTab === item.id 
-                        ? "bg-white/10 text-white shadow-sm" 
-                        : "text-slate-400 hover:bg-white/5 hover:text-white",
-                      isCollapsed ? "justify-center px-0" : "px-4"
-                    )}
-                    onClick={() => setActiveTab(item.id)}
-                  >
-                    <item.icon size={20} className={cn(
-                      "transition-colors",
-                      activeTab === item.id ? "text-brand-blue" : "group-hover:text-brand-green"
-                    )} />
-                    {item.id === 'alerts' && alertCount > 0 && (
-                      <div className={cn(
-                        "absolute flex items-center justify-center bg-rose-500 text-white text-[10px] font-bold rounded-full border-2 border-brand-navy",
-                        isCollapsed ? "top-1 right-1 w-5 h-5" : "left-7 top-2 w-5 h-5"
-                      )}>
-                        {alertCount}
-                      </div>
-                    )}
-                    {!isCollapsed && (
-                      <span className={cn(
-                        "text-[14px] font-semibold transition-colors",
-                        activeTab === item.id ? "text-white" : ""
-                      )}>
-                        {item.label}
-                      </span>
-                    )}
-                    {activeTab === item.id && !isCollapsed && (
-                      <div className="absolute right-2 w-1.5 h-1.5 rounded-full bg-brand-green shadow-[0_0_8px_rgba(118,186,27,0.6)]" />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side={isCollapsed ? "right" : "bottom"} className="bg-brand-navy border-white/10 text-white max-w-[200px]">
-                  <div className="space-y-1">
-                    <p className="font-bold text-brand-blue">{item.label}</p>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">{item.description}</p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            ))}
-          </nav>
-        </div>
+        {/* Search Bar */}
+        {!isCollapsed && (
+          <div className="px-4 py-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
+              <input
+                type="text"
+                placeholder="Search..."
+                className="w-full pl-9 pr-4 py-2 bg-muted/50 border border-border rounded-md text-sm placeholder-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-brand-blue/50 focus:border-transparent transition-all duration-200"
+              />
+            </div>
+          </div>
+        )}
 
-        <div className="hidden lg:block p-4 border-t border-white/10">
-          <Tooltip delayDuration={300}>
-            <TooltipTrigger asChild>
-              <button 
-                onClick={() => setIsCollapsed(!isCollapsed)}
-                className="w-full flex items-center justify-center h-10 hover:bg-white/5 rounded-xl transition-colors text-slate-400 hover:text-white"
-              >
-                {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="bg-brand-navy border-white/10 text-white">
-              <p className="text-[11px] font-bold">{isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}</p>
-            </TooltipContent>
-          </Tooltip>
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-2 overflow-y-auto custom-scrollbar">
+          <ul className="space-y-0.5">
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+
+              return (
+                <li key={item.id}>
+                  <Tooltip delayDuration={300}>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setActiveTab(item.id)}
+                        className={cn(
+                          "w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-md text-left transition-all duration-200 group relative",
+                          isActive
+                            ? "bg-brand-blue/10 text-brand-blue"
+                            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                          isCollapsed ? "justify-center px-2" : ""
+                        )}
+                      >
+                        <div className="flex items-center justify-center min-w-[24px]">
+                          <Icon
+                            className={cn(
+                              "h-5 w-5 flex-shrink-0",
+                              isActive 
+                                ? "text-brand-blue" 
+                                : "text-muted-foreground group-hover:text-foreground"
+                            )}
+                          />
+                        </div>
+                        
+                        {!isCollapsed && (
+                          <div className="flex items-center justify-between w-full">
+                            <span className={cn("text-sm", isActive ? "font-bold" : "font-medium")}>{item.label}</span>
+                            {item.badge && (
+                              <span className={cn(
+                                "px-1.5 py-0.5 text-[10px] font-black rounded-full",
+                                isActive
+                                  ? "bg-brand-blue text-white"
+                                  : "bg-rose-500 text-white"
+                              )}>
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Badge for collapsed state */}
+                        {isCollapsed && item.badge && (
+                          <div className="absolute top-1 right-1 w-4 h-4 flex items-center justify-center rounded-full bg-rose-500 border border-white">
+                            <span className="text-[10px] font-bold text-white">
+                              {parseInt(item.badge) > 9 ? '9+' : item.badge}
+                            </span>
+                          </div>
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    {isCollapsed && (
+                      <TooltipContent side="right" className="bg-slate-900 border-none text-white">
+                        <p className="text-xs font-bold">{item.label}</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        {/* Bottom section with profile and logout */}
+        <div className="mt-auto border-t border-border">
+          {/* Profile Section */}
+          <div className={cn("border-b border-border bg-muted/20", isCollapsed ? 'py-3 px-2' : 'p-3')}>
+            {!isCollapsed ? (
+              <div className="flex items-center px-3 py-2 rounded-md bg-background border border-border shadow-sm">
+                <div className="w-8 h-8 bg-brand-blue/10 rounded-full flex items-center justify-center overflow-hidden border border-brand-blue/20">
+                  {user?.photoURL ? (
+                    <img src={user.photoURL} alt={user.displayName || 'User'} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <span className="text-brand-blue font-bold text-xs">
+                      {user?.displayName?.charAt(0) || user?.email?.charAt(0).toUpperCase() || 'U'}
+                    </span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 ml-2.5">
+                  <p className="text-sm font-bold text-foreground truncate">{user?.displayName || 'User'}</p>
+                  <p className="text-[10px] text-muted-foreground truncate font-medium">{user?.email}</p>
+                </div>
+                <div className="w-2 h-2 bg-brand-green rounded-full ml-2 shadow-[0_0_8px_rgba(118,186,27,0.6)]" title="Online" />
+              </div>
+            ) : (
+              <div className="flex justify-center">
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <div className="relative cursor-help">
+                      <div className="w-10 h-10 bg-brand-blue/10 rounded-full flex items-center justify-center overflow-hidden border border-brand-blue/20">
+                        {user?.photoURL ? (
+                          <img src={user.photoURL} alt={user.displayName || 'User'} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <span className="text-brand-blue font-bold text-sm">
+                            {user?.displayName?.charAt(0) || user?.email?.charAt(0).toUpperCase() || 'U'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-green rounded-full border-2 border-background shadow-sm" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="bg-slate-900 border-none text-white">
+                    <p className="text-xs font-bold">{user?.displayName || user?.email}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            )}
+          </div>
+
+          {/* Logout Button */}
+          <div className="p-3">
+            <button
+              onClick={handleLogout}
+              className={cn(
+                "w-full flex items-center rounded-md text-left transition-all duration-200 group",
+                "text-rose-600 hover:bg-rose-50 hover:text-rose-700",
+                isCollapsed ? "justify-center p-2.5" : "space-x-2.5 px-3 py-2.5"
+              )}
+              title={isCollapsed ? "Logout" : undefined}
+            >
+              <div className="flex items-center justify-center min-w-[24px]">
+                <LogOut className="h-5 w-5 flex-shrink-0 text-rose-500 group-hover:text-rose-600" />
+              </div>
+              
+              {!isCollapsed && (
+                <span className="text-sm font-bold">Logout</span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

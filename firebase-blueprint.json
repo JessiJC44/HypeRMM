@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Device": {
+      "title": "Device",
+      "description": "Managed device information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["workstation", "server", "laptop", "mobile"] },
+        "os": { "type": "string" },
+        "status": { "type": "string", "enum": ["online", "offline", "warning"] },
+        "ip": { "type": "string" },
+        "customer": { "type": "string" },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "anydeskId": { "type": "string" },
+        "splashtopId": { "type": "string" }
+      },
+      "required": ["name", "type", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/devices/{deviceId}": {
+      "schema": "Device",
+      "description": "Managed devices"
+    }
+  }
+}

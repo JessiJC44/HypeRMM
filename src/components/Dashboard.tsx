@@ -125,17 +125,17 @@ export function Dashboard() {
   ];
 
   return (
-    <div className="space-y-6 p-4 lg:p-8 bg-slate-50/50 min-h-screen animate-in fade-in duration-500">
+    <div className="space-y-6 p-4 lg:p-8 bg-background min-h-screen animate-in fade-in duration-500">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-brand-navy tracking-tight">{t('dashboard.title')}</h1>
-          <p className="text-sm text-slate-500 font-medium">{t('dashboard.subtitle')}</p>
+          <h1 className="text-2xl lg:text-3xl font-bold text-foreground tracking-tight">{t('dashboard.title')}</h1>
+          <p className="text-sm text-muted-foreground font-medium">{t('dashboard.subtitle')}</p>
         </div>
-        <Button className="bg-brand-navy hover:bg-brand-navy/90 text-white rounded-xl px-8 h-12 font-bold shadow-lg shadow-brand-navy/10 w-full sm:w-auto">
+        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 h-12 font-bold shadow-lg shadow-primary/10 w-full sm:w-auto">
           {t('dashboard.generate_report')}
         </Button>
       </motion.div>
@@ -157,7 +157,7 @@ export function Dashboard() {
             }}
             whileHover={{ y: -4, scale: 1.02 }}
           >
-            <Card className="border-none shadow-sm overflow-hidden rounded-2xl">
+            <Card className="border-none shadow-sm overflow-hidden rounded-2xl bg-card">
               <div className={cn(
                 "h-1.5 w-full",
                 stat.color === 'brand-blue' ? "bg-brand-blue" :
@@ -166,7 +166,7 @@ export function Dashboard() {
                 "bg-amber-500"
               )} />
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">{stat.label}</CardTitle>
+                <CardTitle className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">{stat.label}</CardTitle>
                 <stat.icon className={cn(
                   "h-4 w-4",
                   stat.color === 'brand-blue' ? "text-brand-blue" :
@@ -176,15 +176,15 @@ export function Dashboard() {
                 )} />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-black text-brand-navy">{stat.value}</div>
+                <div className="text-3xl font-black text-foreground">{stat.value}</div>
                 <div className="flex items-center gap-2 mt-2">
                   <Badge variant="secondary" className={cn(
                     "text-[10px] px-2 py-0.5 font-bold rounded-full",
-                    stat.trendUp ? "bg-brand-green/10 text-brand-green" : "bg-rose-50 text-rose-600"
+                    stat.trendUp ? "bg-brand-green/10 text-brand-green" : "bg-rose-500/10 text-rose-500"
                   )}>
                     {stat.trend}
                   </Badge>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t('dashboard.vs_last')}</span>
+                  <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{t('dashboard.vs_last')}</span>
                 </div>
               </CardContent>
             </Card>
@@ -205,14 +205,14 @@ export function Dashboard() {
           transition={{ delay: 0.4 }}
           className="col-span-full lg:col-span-4"
         >
-          <Card className="rounded-2xl border-none shadow-sm overflow-hidden h-full">
-            <CardHeader className="border-b bg-slate-50/50">
+          <Card className="rounded-2xl border-none shadow-sm overflow-hidden h-full bg-card">
+            <CardHeader className="border-b border-border bg-muted/30">
               <TooltipProvider>
                 <ShadcnTooltip>
                   <TooltipTrigger asChild>
                     <div className="cursor-help">
-                      <CardTitle className="text-lg font-bold text-brand-navy">{t('dashboard.performance')}</CardTitle>
-                      <CardDescription className="font-medium">{t('dashboard.performance_desc')}</CardDescription>
+                      <CardTitle className="text-lg font-bold text-foreground">{t('dashboard.performance')}</CardTitle>
+                      <CardDescription className="font-medium text-muted-foreground">{t('dashboard.performance_desc')}</CardDescription>
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -230,26 +230,29 @@ export function Dashboard() {
                       <stop offset="95%" stopColor="#00AEEF" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-border" />
                   <XAxis 
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }}
+                    tick={{ fontSize: 10, fill: 'currentColor', fontWeight: 700 }}
+                    className="text-muted-foreground"
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }}
+                    tick={{ fontSize: 10, fill: 'currentColor', fontWeight: 700 }}
+                    className="text-muted-foreground"
                   />
                   <Tooltip 
                     contentStyle={{ 
-                      backgroundColor: '#fff', 
-                      borderColor: '#f1f5f9',
+                      backgroundColor: 'var(--card)', 
+                      borderColor: 'var(--border)',
                       borderRadius: '12px',
                       boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                      border: 'none'
+                      color: 'var(--foreground)'
                     }}
+                    itemStyle={{ color: 'var(--foreground)' }}
                   />
                   <Area 
                     type="monotone" 
@@ -279,10 +282,10 @@ export function Dashboard() {
           transition={{ delay: 0.5 }}
           className="col-span-full lg:col-span-3"
         >
-          <Card className="rounded-2xl border-none shadow-sm overflow-hidden h-full">
-            <CardHeader className="border-b border-slate-50 bg-slate-50/50">
-              <CardTitle className="text-lg font-bold text-brand-navy">{t('dashboard.critical_alerts')}</CardTitle>
-              <CardDescription className="font-medium">{t('dashboard.attention_required')}</CardDescription>
+          <Card className="rounded-2xl border-none shadow-sm overflow-hidden h-full bg-card">
+            <CardHeader className="border-b border-border bg-muted/30">
+              <CardTitle className="text-lg font-bold text-foreground">{t('dashboard.critical_alerts')}</CardTitle>
+              <CardDescription className="font-medium text-muted-foreground">{t('dashboard.attention_required')}</CardDescription>
             </CardHeader>
             <CardContent className="p-4 lg:p-6">
               <div className="space-y-3">
@@ -294,27 +297,27 @@ export function Dashboard() {
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.6 + (index * 0.1) }}
-                          className="flex items-start gap-3 lg:gap-4 p-3 lg:p-4 rounded-2xl border border-slate-50 bg-slate-50/30 hover:bg-slate-50 transition-colors group cursor-help"
+                          className="flex items-start gap-3 lg:gap-4 p-3 lg:p-4 rounded-2xl border border-border bg-muted/20 hover:bg-muted/40 transition-colors group cursor-help"
                         >
                           <div className={cn(
                             "mt-0.5 p-2 rounded-xl shadow-sm shrink-0",
-                            alert.severity === 'critical' ? "bg-rose-50 text-rose-500" : "bg-amber-50 text-amber-500"
+                            alert.severity === 'critical' ? "bg-rose-500/10 text-rose-500" : "bg-amber-500/10 text-amber-500"
                           )}>
                             <AlertTriangle size={16} strokeWidth={2.5} />
                           </div>
                           <div className="flex-1 min-w-0 space-y-1">
-                            <p className="text-sm font-black text-brand-navy tracking-tight truncate">{alert.deviceName}</p>
-                            <p className="text-xs text-slate-500 font-bold line-clamp-1">{alert.message}</p>
+                            <p className="text-sm font-black text-foreground tracking-tight truncate">{alert.deviceName}</p>
+                            <p className="text-xs text-muted-foreground font-bold line-clamp-1">{alert.message}</p>
                           </div>
-                          <div className="hidden sm:block text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-2 py-1 rounded-lg border border-slate-100 shrink-0">
+                          <div className="hidden sm:block text-[10px] font-black text-muted-foreground uppercase tracking-widest bg-background px-2 py-1 rounded-lg border border-border shrink-0">
                             {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </motion.div>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p className="text-xs font-bold mb-1">Alert Details</p>
-                        <p className="text-[10px] text-slate-400">Severity: <span className="capitalize">{alert.severity}</span></p>
-                        <p className="text-[10px] text-slate-400">Time: {new Date(alert.timestamp).toLocaleString()}</p>
+                        <p className="text-[10px] text-muted-foreground">Severity: <span className="capitalize">{alert.severity}</span></p>
+                        <p className="text-[10px] text-muted-foreground">Time: {new Date(alert.timestamp).toLocaleString()}</p>
                       </TooltipContent>
                     </ShadcnTooltip>
                   </TooltipProvider>
@@ -323,7 +326,7 @@ export function Dashboard() {
               <TooltipProvider>
                 <ShadcnTooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" className="w-full mt-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded-xl h-10">
+                    <Button variant="ghost" className="w-full mt-6 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-xl h-10">
                       {t('dashboard.view_all_alerts')}
                     </Button>
                   </TooltipTrigger>

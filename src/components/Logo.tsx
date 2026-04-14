@@ -13,7 +13,7 @@ export const Logo: React.FC<{ className?: string; collapsed?: boolean }> = ({ cl
         </svg>
         
         {/* Monitor Foreground */}
-        <div className="relative z-10 bg-white p-1 rounded-md border-2 border-brand-navy shadow-sm">
+        <div className="relative z-10 bg-background p-1 rounded-md border-2 border-brand-navy dark:border-brand-blue/50 shadow-sm">
           <div className="w-6 h-5 bg-brand-blue rounded-sm flex items-center justify-center overflow-hidden">
             {/* Cute Face */}
             <div className="flex gap-1.5 items-center">
@@ -22,7 +22,7 @@ export const Logo: React.FC<{ className?: string; collapsed?: boolean }> = ({ cl
               <div className="w-1 h-1 bg-white rounded-full" />
             </div>
           </div>
-          <div className="w-2 h-0.5 bg-brand-navy mx-auto mt-0.5 rounded-full" />
+          <div className="w-2 h-0.5 bg-brand-navy dark:bg-brand-blue/50 mx-auto mt-0.5 rounded-full" />
         </div>
       </div>
       
@@ -32,7 +32,7 @@ export const Logo: React.FC<{ className?: string; collapsed?: boolean }> = ({ cl
             <span className="text-brand-blue">Hype</span>
             <span className="text-brand-green">Remote</span>
           </span>
-          <span className="text-[8px] uppercase tracking-[0.2em] font-black text-white/40 ml-0.5">
+          <span className="text-[8px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 ml-0.5">
             Managed IT Platform
           </span>
         </div>

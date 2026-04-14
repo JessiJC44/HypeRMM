@@ -9,6 +9,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Eye, EyeOff, Mail, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/src/components/Logo";
+import { toast } from "sonner";
+import { auth, googleProvider } from "@/src/lib/firebase";
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signInWithPopup,
+  updateProfile
+} from "firebase/auth";
 
 
 interface PupilProps {
@@ -193,6 +201,7 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
   const [isTyping, setIsTyping] = useState(false);
   const [isLookingAtEachOther, setIsLookingAtEachOther] = useState(false);
   const [isPurplePeeking, setIsPurplePeeking] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const purpleRef = useRef<HTMLDivElement>(null);
   const blackRef = useRef<HTMLDivElement>(null);
   const yellowRef = useRef<HTMLDivElement>(null);
@@ -311,19 +320,53 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
     setError("");
     setIsLoading(true);
 
-    // Simulate API delay (quick)
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    // Mock authentication - validate against dummy credentials
-    if (email === "erik@gmail.com" && password === "1234") {
-      console.log("✅ Login successful!");
-      if (onLogin) onLogin();
-    } else {
-      setError("Invalid email or password. Please try again.");
-      console.log("❌ Login failed");
+    try {
+      if (isSignUp) {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Update profile with a default name if needed
+        await updateProfile(userCredential.user, {
+          displayName: email.split('@')[0]
+        });
+        toast.success("Account created successfully!");
+        if (onLogin) onLogin();
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        toast.success("Welcome back!");
+        if (onLogin) onLogin();
+      }
+    } catch (err: any) {
+      console.error("Auth error:", err);
+      let message = "An error occurred. Please try again.";
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        message = "Invalid email or password.";
+      } else if (err.code === 'auth/email-already-in-use') {
+        message = "This email is already in use.";
+      } else if (err.code === 'auth/weak-password') {
+        message = "Password should be at least 6 characters.";
+      } else if (err.code === 'auth/invalid-email') {
+        message = "Invalid email address.";
+      } else if (err.code === 'auth/operation-not-allowed') {
+        message = "Email/Password login is not enabled in Firebase Console.";
+      }
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    setIsLoading(false);
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+      toast.success("Logged in with Google!");
+      if (onLogin) onLogin();
+    } catch (err: any) {
+      console.error("Google Auth error:", err);
+      toast.error("Failed to login with Google.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -533,8 +576,12 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
 
           {/* Header */}
           <div className="text-center mb-10">
-            <h1 className="text-3xl font-bold tracking-tight mb-2">Welcome back!</h1>
-            <p className="text-muted-foreground text-sm">Please enter your details</p>
+            <h1 className="text-3xl font-bold tracking-tight mb-2">
+              {isSignUp ? "Create an account" : "Welcome back!"}
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              {isSignUp ? "Enter your details to get started" : "Please enter your details"}
+            </p>
           </div>
 
           {/* Login Form */}
@@ -611,7 +658,7 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
               size="lg" 
               disabled={isLoading}
             >
-              {isLoading ? "Signing in..." : "Log in"}
+              {isLoading ? (isSignUp ? "Creating account..." : "Signing in...") : (isSignUp ? "Sign Up" : "Log in")}
             </Button>
           </form>
 
@@ -621,18 +668,23 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
               variant="outline" 
               className="w-full h-12 bg-background border-border/60 hover:bg-accent"
               type="button"
+              onClick={handleGoogleLogin}
+              disabled={isLoading}
             >
               <Mail className="mr-2 size-5" />
-              Log in with Google
+              {isSignUp ? "Sign up with Google" : "Log in with Google"}
             </Button>
           </div>
 
           {/* Sign Up Link */}
           <div className="text-center text-sm text-muted-foreground mt-8">
-            Don't have an account?{" "}
-            <a href="#" className="text-foreground font-medium hover:underline">
-              Sign Up
-            </a>
+            {isSignUp ? "Already have an account? " : "Don't have an account? "}
+            <button 
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-foreground font-medium hover:underline"
+            >
+              {isSignUp ? "Log in" : "Sign Up"}
+            </button>
           </div>
         </div>
       </div>

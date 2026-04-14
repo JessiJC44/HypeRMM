@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - displayName: string
+    //   - photoURL: string
+    //   - role: string (admin, user)
+    //   - createdAt: timestamp
+    //
+    // Collection: devices
+    // Document ID: {deviceId}
+    // Fields:
+    //   - id: string
+    //   - name: string (required)
+    //   - type: string (required, workstation|server|laptop|mobile)
+    //   - status: string (required, online|offline|warning)
+    //   - ip: string
+    //   - customer: string
+    //   - lastSeen: timestamp
+    //   - anydeskId: string
+    //   - splashtopId: string
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "sedrayiokoraz@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && 
+                      hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt']) &&
+                      request.resource.data.role == 'user'; // Default role
+      allow update: if isAuthenticated() && isOwner(userId) && 
+                      hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt']) &&
+                      request.resource.data.role == resource.data.role; // Prevent self-role-escalation
+      allow delete: if isAdmin();
+    }
+
+    match /devices/{deviceId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

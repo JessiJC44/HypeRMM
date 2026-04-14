@@ -32,17 +32,66 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/comp
 import { Button } from '@/components/ui/button';
 import { useLanguage } from './contexts/LanguageContext';
 import ExampleSwitch from '@/components/ui/switch-1';
+import SkyToggle from '@/components/ui/sky-toggle';
+import { auth, db } from './lib/firebase';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function App() {
   const [activeTab, setActiveTab] = React.useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
-  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+  const [user, setUser] = React.useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = React.useState(true);
+  const [isDarkMode, setIsDarkMode] = React.useState(false);
   const { language, setLanguage, t } = useLanguage();
 
-  if (!isAuthenticated) {
+  React.useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Ensure user exists in Firestore
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (!userDoc.exists()) {
+          await setDoc(userDocRef, {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+            role: 'user',
+            createdAt: serverTimestamp()
+          });
+        }
+        setUser(firebaseUser);
+      } else {
+        setUser(null);
+      }
+      setIsAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-blue"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
     return (
       <>
-        <AnimatedCharactersLoginPage onLogin={() => setIsAuthenticated(true)} />
+        <AnimatedCharactersLoginPage />
         <Toaster position="bottom-right" />
       </>
     );
@@ -106,6 +155,7 @@ export default function App() {
           }} 
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
+          user={user}
         />
         
         {/* Mobile Overlay */}
@@ -122,13 +172,13 @@ export default function App() {
         </AnimatePresence>
         
         <main className="flex-1 min-w-0 flex flex-col">
-          <header className="h-16 lg:h-20 border-b bg-white/80 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-4 lg:px-10 shadow-sm">
+          <header className="h-16 lg:h-20 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-4 lg:px-10 shadow-sm">
             <div className="flex items-center gap-3 lg:gap-4">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button 
                     onClick={() => setIsSidebarOpen(true)}
-                    className="lg:hidden p-2 hover:bg-slate-100 rounded-lg text-brand-navy"
+                    className="lg:hidden p-2 hover:bg-accent rounded-lg text-foreground"
                   >
                     <Menu size={24} />
                   </button>
@@ -138,12 +188,12 @@ export default function App() {
                 </TooltipContent>
               </Tooltip>
               <div className="flex flex-col">
-                <h2 className="text-lg lg:text-xl font-bold text-brand-navy capitalize tracking-tight truncate max-w-[150px] lg:max-w-none">
+                <h2 className="text-lg lg:text-xl font-bold text-foreground capitalize tracking-tight truncate max-w-[150px] lg:max-w-none">
                   {t(`nav.${activeTab}`)}
                 </h2>
-                <div className="hidden sm:flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-slate-400">
+                <div className="hidden sm:flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-muted-foreground/60">
                   <span>HypeRemote</span>
-                  <span className="w-1 h-1 rounded-full bg-slate-300" />
+                  <span className="w-1 h-1 rounded-full bg-border" />
                   <span>{t('header.platform')}</span>
                 </div>
               </div>
@@ -162,7 +212,10 @@ export default function App() {
                   <p className="text-xs">{t('status.optimal_desc')}</p>
                 </TooltipContent>
               </Tooltip>
-              <div className="hidden sm:block h-8 lg:h-10 w-[1px] bg-slate-100" />
+              <div className="hidden md:block">
+                <SkyToggle checked={isDarkMode} onChange={setIsDarkMode} />
+              </div>
+              <div className="hidden sm:block h-8 lg:h-10 w-[1px] bg-border" />
               <div className="flex items-center gap-3">
                 <DropdownMenu>
                   <DropdownMenuTrigger render={
@@ -173,30 +226,30 @@ export default function App() {
                       <Users size={20} className="hidden lg:block" />
                     </button>
                   } />
-                  <DropdownMenuContent align="end" className="w-64 rounded-xl shadow-xl border-slate-100 p-2">
+                  <DropdownMenuContent align="end" className="w-64 rounded-xl shadow-xl border-border bg-card p-2">
                     <DropdownMenuGroup>
                       <DropdownMenuLabel className="px-2 py-1.5">
                         <div className="flex flex-col gap-0.5">
-                          <p className="text-sm font-bold text-brand-navy">Erik Admin</p>
-                          <p className="text-[10px] text-slate-400 font-medium">erik@gmail.com</p>
+                          <p className="text-sm font-bold text-foreground">{user.displayName || 'User'}</p>
+                          <p className="text-[10px] text-muted-foreground font-medium">{user.email}</p>
                         </div>
                       </DropdownMenuLabel>
-                      <DropdownMenuSeparator className="my-1 bg-slate-50" />
+                      <DropdownMenuSeparator className="my-1 bg-border/50" />
                       <DropdownMenuItem 
-                        className="rounded-lg gap-2 cursor-pointer focus:bg-slate-50 focus:text-brand-blue py-2"
+                        className="rounded-lg gap-2 cursor-pointer focus:bg-accent focus:text-brand-blue py-2"
                         onClick={() => setActiveTab('admin')}
                       >
                         <Settings size={16} />
                         <span className="font-semibold text-xs">{t('profile.settings')}</span>
                       </DropdownMenuItem>
                       
-                      <div className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-accent transition-colors">
                         <div className="flex items-center gap-2">
-                          <Globe size={16} className="text-slate-500" />
-                          <span className="font-semibold text-xs text-slate-700">{t('profile.language')}</span>
+                          <Globe size={16} className="text-muted-foreground" />
+                          <span className="font-semibold text-xs text-foreground">{t('profile.language')}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">{language === 'fr' ? 'FR' : 'EN'}</span>
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase">{language === 'fr' ? 'FR' : 'EN'}</span>
                           <ExampleSwitch 
                             checked={language === 'en'} 
                             onCheckedChange={(checked) => setLanguage(checked ? 'en' : 'fr')} 
@@ -204,10 +257,10 @@ export default function App() {
                         </div>
                       </div>
 
-                      <DropdownMenuSeparator className="my-1 bg-slate-50" />
+                      <DropdownMenuSeparator className="my-1 bg-border/50" />
                       <DropdownMenuItem 
                         className="rounded-lg gap-2 cursor-pointer focus:bg-rose-50 text-rose-500 focus:text-rose-600 py-2"
-                        onClick={() => setIsAuthenticated(false)}
+                        onClick={() => auth.signOut()}
                       >
                         <LogOut size={16} />
                         <span className="font-black uppercase tracking-widest text-[10px]">{t('profile.logout')}</span>
