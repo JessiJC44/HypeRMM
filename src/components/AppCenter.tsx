@@ -14,7 +14,7 @@ export function AppCenter() {
       status: 'Installed', 
       version: '3.5.2.1', 
       developer: 'Splashtop Inc.',
-      logo: 'https://logo.clearbit.com/splashtop.com'
+      logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/5/5e/Splashtop_Logo.svg/256px-Splashtop_Logo.svg.png'
     },
     { 
       name: 'AnyDesk', 
@@ -22,7 +22,7 @@ export function AppCenter() {
       status: 'Available', 
       version: '7.1.0', 
       developer: 'AnyDesk Software',
-      logo: 'https://logo.clearbit.com/anydesk.com'
+      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/AnyDesk_Logo.svg/256px-AnyDesk_Logo.svg.png'
     },
     { 
       name: 'Chocolatey', 

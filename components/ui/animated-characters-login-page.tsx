@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Eye, EyeOff, Mail, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/src/components/Logo";
 
 
 interface PupilProps {
@@ -330,12 +331,7 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
       {/* Left Content Section */}
       <div className="relative hidden lg:flex flex-col justify-between bg-gradient-to-br from-primary/90 via-primary to-primary/80 p-12 text-primary-foreground">
         <div className="relative z-20">
-          <div className="flex items-center gap-2 text-lg font-semibold">
-            <div className="size-8 rounded-lg bg-primary-foreground/10 backdrop-blur-sm flex items-center justify-center">
-              <Sparkles className="size-4" />
-            </div>
-            <span>HypeRemote</span>
-          </div>
+          <Logo />
         </div>
 
         <div className="relative z-20 flex items-end justify-center h-[500px]">
@@ -531,11 +527,8 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
       <div className="flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-[420px]">
           {/* Mobile Logo */}
-          <div className="lg:hidden flex items-center justify-center gap-2 text-lg font-semibold mb-12">
-            <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Sparkles className="size-4 text-primary" />
-            </div>
-            <span>HypeRemote</span>
+          <div className="lg:hidden flex items-center justify-center mb-12">
+            <Logo />
           </div>
 
           {/* Header */}

@@ -95,8 +95,8 @@ export function Assets() {
   const [remoteTool, setRemoteTool] = React.useState<'splashtop' | 'anydesk'>('splashtop');
 
   const REMOTE_LOGOS = {
-    splashtop: "https://logo.clearbit.com/splashtop.com",
-    anydesk: "https://logo.clearbit.com/anydesk.com"
+    splashtop: "https://upload.wikimedia.org/wikipedia/en/thumb/5/5e/Splashtop_Logo.svg/256px-Splashtop_Logo.svg.png",
+    anydesk: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/AnyDesk_Logo.svg/256px-AnyDesk_Logo.svg.png"
   };
 
   const customers = ['Pescespada Island', 'Acme Corp', 'Global Logistics', 'Nexus IT', 'Tech Solutions', 'Starlight Inc', 'Enterprise Alpha', 'Beta Systems', 'Gamma Solutions', 'Delta Services'];
