@@ -1,0 +1,242 @@
+import * as React from 'react';
+import { Sidebar } from './components/Sidebar';
+import { Dashboard } from './components/Dashboard';
+import { Ticketing } from './components/Ticketing';
+import { Assets } from './components/Assets';
+import { PatchManagement } from './components/PatchManagement';
+import { SoftwareInventory } from './components/SoftwareInventory';
+import { NetworkDiscovery } from './components/NetworkDiscovery';
+import { SNMP } from './components/SNMP';
+import { Alerts } from './components/Alerts';
+import { Sites } from './components/Sites';
+import { AppCenter } from './components/AppCenter';
+import { KnowledgeBase } from './components/KnowledgeBase';
+import { Reports } from './components/Reports';
+import { ReferFriend } from './components/ReferFriend';
+import { Admin } from './components/Admin';
+import { AICenter } from './components/AICenter';
+import { Toaster } from '@/components/ui/sonner';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger,
+  DropdownMenuGroup,
+} from '@/components/ui/dropdown-menu';
+import { Users, Menu, X, LogOut, Sparkles, Settings, Globe, Check } from 'lucide-react';
+import { AnimatedCharactersLoginPage } from '@/components/ui/animated-characters-login-page';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
+import { useLanguage } from './contexts/LanguageContext';
+import ExampleSwitch from '@/components/ui/switch-1';
+
+export default function App() {
+  const [activeTab, setActiveTab] = React.useState('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+  const { language, setLanguage, t } = useLanguage();
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <AnimatedCharactersLoginPage onLogin={() => setIsAuthenticated(true)} />
+        <Toaster position="bottom-right" />
+      </>
+    );
+  }
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return <Dashboard />;
+      case 'tickets':
+        return <Ticketing />;
+      case 'assets':
+        return <Assets />;
+      case 'alerts':
+        return <Alerts />;
+      case 'sites':
+        return <Sites />;
+      case 'app-center':
+        return <AppCenter />;
+      case 'kb':
+        return <KnowledgeBase />;
+      case 'reports':
+        return <Reports />;
+      case 'refer':
+        return <ReferFriend />;
+      case 'ai-center':
+        return <AICenter />;
+      case 'admin':
+        return <Admin />;
+      case 'patches':
+        return <PatchManagement />;
+      case 'software':
+        return <SoftwareInventory />;
+      case 'network':
+        return <NetworkDiscovery />;
+      case 'snmp':
+        return <SNMP />;
+      default:
+        return (
+          <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] text-center p-8">
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+              <span className="text-2xl">🚧</span>
+            </div>
+            <h2 className="text-2xl font-bold">Under Construction</h2>
+            <p className="text-muted-foreground max-w-md mt-2">
+              The {activeTab} module is currently being developed. Please check back soon!
+            </p>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <TooltipProvider>
+      <div className="flex min-h-screen bg-background text-foreground font-sans antialiased overflow-x-hidden">
+        <Sidebar 
+          activeTab={activeTab} 
+          setActiveTab={(tab) => {
+            setActiveTab(tab);
+            setIsSidebarOpen(false);
+          }} 
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+        />
+        
+        {/* Mobile Overlay */}
+        <AnimatePresence>
+          {isSidebarOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-brand-navy/60 backdrop-blur-sm z-40 lg:hidden"
+            />
+          )}
+        </AnimatePresence>
+        
+        <main className="flex-1 min-w-0 flex flex-col">
+          <header className="h-16 lg:h-20 border-b bg-white/80 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-4 lg:px-10 shadow-sm">
+            <div className="flex items-center gap-3 lg:gap-4">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button 
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="lg:hidden p-2 hover:bg-slate-100 rounded-lg text-brand-navy"
+                  >
+                    <Menu size={24} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p className="text-xs">Open Navigation Menu</p>
+                </TooltipContent>
+              </Tooltip>
+              <div className="flex flex-col">
+                <h2 className="text-lg lg:text-xl font-bold text-brand-navy capitalize tracking-tight truncate max-w-[150px] lg:max-w-none">
+                  {t(`nav.${activeTab}`)}
+                </h2>
+                <div className="hidden sm:flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-slate-400">
+                  <span>HypeRemote</span>
+                  <span className="w-1 h-1 rounded-full bg-slate-300" />
+                  <span>{t('header.platform')}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 lg:gap-6">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-brand-green/10 rounded-full border border-brand-green/20 cursor-help">
+                    <span className="w-2 h-2 rounded-full bg-brand-green animate-pulse shadow-[0_0_8px_rgba(118,186,27,0.6)]" />
+                    <span className="text-xs font-bold text-brand-green uppercase tracking-wider">
+                      {t('status.optimal')}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">{t('status.optimal_desc')}</p>
+                </TooltipContent>
+              </Tooltip>
+              <div className="hidden sm:block h-8 lg:h-10 w-[1px] bg-slate-100" />
+              <div className="flex items-center gap-3">
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={
+                    <button 
+                      className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-brand-blue/10 border border-brand-blue/20 flex items-center justify-center text-brand-blue hover:bg-brand-blue/20 transition-colors outline-none"
+                    >
+                      <Users size={18} className="lg:hidden" />
+                      <Users size={20} className="hidden lg:block" />
+                    </button>
+                  } />
+                  <DropdownMenuContent align="end" className="w-64 rounded-xl shadow-xl border-slate-100 p-2">
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel className="px-2 py-1.5">
+                        <div className="flex flex-col gap-0.5">
+                          <p className="text-sm font-bold text-brand-navy">Erik Admin</p>
+                          <p className="text-[10px] text-slate-400 font-medium">erik@gmail.com</p>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator className="my-1 bg-slate-50" />
+                      <DropdownMenuItem 
+                        className="rounded-lg gap-2 cursor-pointer focus:bg-slate-50 focus:text-brand-blue py-2"
+                        onClick={() => setActiveTab('admin')}
+                      >
+                        <Settings size={16} />
+                        <span className="font-semibold text-xs">{t('profile.settings')}</span>
+                      </DropdownMenuItem>
+                      
+                      <div className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <Globe size={16} className="text-slate-500" />
+                          <span className="font-semibold text-xs text-slate-700">{t('profile.language')}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">{language === 'fr' ? 'FR' : 'EN'}</span>
+                          <ExampleSwitch 
+                            checked={language === 'en'} 
+                            onCheckedChange={(checked) => setLanguage(checked ? 'en' : 'fr')} 
+                          />
+                        </div>
+                      </div>
+
+                      <DropdownMenuSeparator className="my-1 bg-slate-50" />
+                      <DropdownMenuItem 
+                        className="rounded-lg gap-2 cursor-pointer focus:bg-rose-50 text-rose-500 focus:text-rose-600 py-2"
+                        onClick={() => setIsAuthenticated(false)}
+                      >
+                        <LogOut size={16} />
+                        <span className="font-black uppercase tracking-widest text-[10px]">{t('profile.logout')}</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          </header>
+
+          <div className="flex-1 overflow-x-hidden">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="h-full"
+              >
+                {renderContent()}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </main>
+
+        <Toaster position="bottom-right" />
+      </div>
+    </TooltipProvider>
+  );
+}
