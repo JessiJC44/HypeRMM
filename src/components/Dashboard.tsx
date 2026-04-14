@@ -160,8 +160,8 @@ export function Dashboard() {
             <Card className="border-none shadow-sm overflow-hidden rounded-2xl bg-card">
               <div className={cn(
                 "h-1.5 w-full",
-                stat.color === 'brand-blue' ? "bg-brand-blue" :
-                stat.color === 'brand-green' ? "bg-brand-green" :
+                stat.color === 'brand-blue' ? "bg-primary" :
+                stat.color === 'brand-green' ? "bg-emerald-500" :
                 stat.color === 'rose' ? "bg-rose-500" :
                 "bg-amber-500"
               )} />
@@ -169,8 +169,8 @@ export function Dashboard() {
                 <CardTitle className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">{stat.label}</CardTitle>
                 <stat.icon className={cn(
                   "h-4 w-4",
-                  stat.color === 'brand-blue' ? "text-brand-blue" :
-                  stat.color === 'brand-green' ? "text-brand-green" :
+                  stat.color === 'brand-blue' ? "text-primary" :
+                  stat.color === 'brand-green' ? "text-emerald-500" :
                   stat.color === 'rose' ? "text-rose-500" :
                   "text-amber-500"
                 )} />
@@ -180,7 +180,7 @@ export function Dashboard() {
                 <div className="flex items-center gap-2 mt-2">
                   <Badge variant="secondary" className={cn(
                     "text-[10px] px-2 py-0.5 font-bold rounded-full",
-                    stat.trendUp ? "bg-brand-green/10 text-brand-green" : "bg-rose-500/10 text-rose-500"
+                    stat.trendUp ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
                   )}>
                     {stat.trend}
                   </Badge>
@@ -205,7 +205,7 @@ export function Dashboard() {
           transition={{ delay: 0.4 }}
           className="col-span-full lg:col-span-4"
         >
-          <Card className="rounded-2xl border-none shadow-sm overflow-hidden h-full bg-card">
+          <Card className="rounded-2xl border border-border shadow-sm overflow-hidden h-full bg-card">
             <CardHeader className="border-b border-border bg-muted/30">
               <TooltipProvider>
                 <ShadcnTooltip>
@@ -226,38 +226,36 @@ export function Dashboard() {
                 <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="colorTickets" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00AEEF" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#00AEEF" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-border" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                   <XAxis 
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fontSize: 10, fill: 'currentColor', fontWeight: 700 }}
-                    className="text-muted-foreground"
+                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontWeight: 700 }}
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fontSize: 10, fill: 'currentColor', fontWeight: 700 }}
-                    className="text-muted-foreground"
+                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontWeight: 700 }}
                   />
                   <Tooltip 
                     contentStyle={{ 
-                      backgroundColor: 'var(--card)', 
-                      borderColor: 'var(--border)',
+                      backgroundColor: 'hsl(var(--card))', 
+                      borderColor: 'hsl(var(--border))',
                       borderRadius: '12px',
                       boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                      color: 'var(--foreground)'
+                      color: 'hsl(var(--foreground))'
                     }}
-                    itemStyle={{ color: 'var(--foreground)' }}
+                    itemStyle={{ color: 'hsl(var(--primary))' }}
                   />
                   <Area 
                     type="monotone" 
                     dataKey="tickets" 
-                    stroke="#00AEEF" 
+                    stroke="hsl(var(--primary))" 
                     fillOpacity={1} 
                     fill="url(#colorTickets)" 
                     strokeWidth={3}
@@ -265,7 +263,7 @@ export function Dashboard() {
                   <Area 
                     type="monotone" 
                     dataKey="alerts" 
-                    stroke="#76BA1B" 
+                    stroke="hsl(var(--emerald-500))" 
                     fill="transparent" 
                     strokeWidth={2}
                     strokeDasharray="6 4"
@@ -282,7 +280,7 @@ export function Dashboard() {
           transition={{ delay: 0.5 }}
           className="col-span-full lg:col-span-3"
         >
-          <Card className="rounded-2xl border-none shadow-sm overflow-hidden h-full bg-card">
+          <Card className="rounded-2xl border border-border shadow-sm overflow-hidden h-full bg-card">
             <CardHeader className="border-b border-border bg-muted/30">
               <CardTitle className="text-lg font-bold text-foreground">{t('dashboard.critical_alerts')}</CardTitle>
               <CardDescription className="font-medium text-muted-foreground">{t('dashboard.attention_required')}</CardDescription>

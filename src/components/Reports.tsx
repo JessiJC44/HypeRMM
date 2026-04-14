@@ -24,22 +24,22 @@ export function Reports() {
   ];
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-[#f8f9fa] min-h-screen animate-in fade-in duration-500">
+    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-800">Reports</h1>
-          <p className="text-sm text-slate-500">Generate and schedule detailed reports for your customers.</p>
+          <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Reports</h1>
+          <p className="text-sm text-muted-foreground">Generate and schedule detailed reports for your customers.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
-          <Button variant="outline" className="rounded-full px-6 border-slate-200 font-bold gap-2 w-full sm:w-auto">
+          <Button variant="outline" className="rounded-full px-6 border-border font-bold gap-2 w-full sm:w-auto bg-card text-muted-foreground hover:bg-muted/50">
             <Calendar size={18} />
             Scheduled Reports
           </Button>
-          <Button className="bg-[#003d33] hover:bg-[#002b24] text-white rounded-full px-6 gap-2 w-full sm:w-auto">
+          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 gap-2 w-full sm:w-auto">
             <Download size={18} />
             Export Data
           </Button>
@@ -54,14 +54,14 @@ export function Reports() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1 * index }}
           >
-            <Card className="border-none shadow-sm hover:shadow-md transition-all cursor-pointer group h-full">
+            <Card className="border border-border bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group h-full">
               <CardContent className="p-6">
-                <div className="p-3 bg-blue-50 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors w-fit mb-4">
+                <div className="p-3 bg-primary/10 rounded-2xl text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors w-fit mb-4">
                   <report.icon size={24} />
                 </div>
-                <h3 className="font-bold text-slate-800">{report.title}</h3>
-                <p className="text-xs text-slate-500 font-medium mt-1">{report.desc}</p>
-                <Button variant="ghost" size="sm" className="mt-4 text-blue-600 font-bold p-0 h-auto hover:bg-transparent">
+                <h3 className="font-bold text-foreground">{report.title}</h3>
+                <p className="text-xs text-muted-foreground font-medium mt-1">{report.desc}</p>
+                <Button variant="ghost" size="sm" className="mt-4 text-primary font-bold p-0 h-auto hover:bg-transparent">
                   Generate Now
                 </Button>
               </CardContent>
@@ -77,11 +77,11 @@ export function Reports() {
           transition={{ delay: 0.4 }}
           className="lg:col-span-2"
         >
-          <Card className="border-none shadow-sm h-full">
-            <CardHeader className="border-b bg-slate-50/30 px-6 py-4">
+          <Card className="border border-border bg-card shadow-sm h-full">
+            <CardHeader className="border-b border-border bg-muted/30 px-6 py-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-bold text-slate-800">Ticket Volume Trends</CardTitle>
-                <Button variant="outline" size="sm" className="rounded-full h-8 gap-2 border-slate-200 text-xs font-bold">
+                <CardTitle className="text-lg font-bold text-foreground">Ticket Volume Trends</CardTitle>
+                <Button variant="outline" size="sm" className="rounded-full h-8 gap-2 border-border text-xs font-bold bg-card text-muted-foreground hover:bg-muted/50">
                   Last 6 Months
                   <ChevronDown size={14} />
                 </Button>
@@ -90,27 +90,29 @@ export function Reports() {
             <CardContent className="p-6 h-[350px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                   <XAxis 
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fontSize: 12, fill: '#94a3b8', fontWeight: 600 }}
+                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))', fontWeight: 600 }}
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fontSize: 12, fill: '#94a3b8', fontWeight: 600 }}
+                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))', fontWeight: 600 }}
                   />
                   <Tooltip 
                     contentStyle={{ 
-                      backgroundColor: '#fff', 
-                      border: 'none',
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
                       borderRadius: '12px',
-                      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
+                      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                      color: 'hsl(var(--foreground))'
                     }}
+                    itemStyle={{ color: 'hsl(var(--primary))' }}
                   />
-                  <Bar dataKey="tickets" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={40} />
+                  <Bar dataKey="tickets" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} barSize={40} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -123,8 +125,8 @@ export function Reports() {
           transition={{ delay: 0.4 }}
           className="space-y-6"
         >
-          <h2 className="text-xl font-bold text-slate-800">Recent Reports</h2>
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-50">
+          <h2 className="text-xl font-bold text-foreground">Recent Reports</h2>
+          <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden divide-y divide-border">
             {[
               { name: 'Monthly Executive Summary', date: 'Oct 01, 2023', size: '2.4 MB' },
               { name: 'Asset Inventory - Acme Corp', date: 'Sep 28, 2023', size: '1.8 MB' },
@@ -136,22 +138,22 @@ export function Reports() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 + (i * 0.1) }}
-                className="p-4 flex items-center justify-between hover:bg-slate-50/50 transition-colors cursor-pointer group"
+                className="p-4 flex items-center justify-between hover:bg-muted/20 transition-colors cursor-pointer group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-slate-100 rounded-lg text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                  <div className="p-2 bg-muted rounded-lg text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                     <FileText size={18} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h4 className="text-sm font-bold text-slate-700 truncate">{report.name}</h4>
-                    <p className="text-[10px] text-slate-400 font-medium whitespace-nowrap">{report.date} • {report.size}</p>
+                    <h4 className="text-sm font-bold text-foreground truncate">{report.name}</h4>
+                    <p className="text-[10px] text-muted-foreground font-medium whitespace-nowrap">{report.date} • {report.size}</p>
                   </div>
                 </div>
-                <Download size={16} className="text-slate-300 group-hover:text-blue-600 transition-colors" />
+                <Download size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
               </motion.div>
             ))}
           </div>
-          <Button variant="outline" className="w-full rounded-xl border-slate-200 font-bold">View All History</Button>
+          <Button variant="outline" className="w-full rounded-xl border-border font-bold bg-card text-muted-foreground hover:bg-muted/50">View All History</Button>
         </motion.div>
       </div>
     </div>

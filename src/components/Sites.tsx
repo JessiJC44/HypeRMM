@@ -15,17 +15,17 @@ export function Sites() {
   ];
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-[#f8f9fa] min-h-screen animate-in fade-in duration-500">
+    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-800">Sites & Customers</h1>
-          <p className="text-sm text-slate-500">Manage your customer organizations and their physical locations.</p>
+          <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Sites & Customers</h1>
+          <p className="text-sm text-muted-foreground">Manage your customer organizations and their physical locations.</p>
         </div>
-        <Button className="bg-[#003d33] hover:bg-[#002b24] text-white rounded-full px-6 gap-2 w-full sm:w-auto">
+        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 gap-2 w-full sm:w-auto">
           <Plus size={18} />
           Add New Site
         </Button>
@@ -38,10 +38,10 @@ export function Sites() {
         className="flex flex-col sm:flex-row items-center gap-4"
       >
         <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <Input placeholder="Search sites, customers, or locations..." className="pl-10 rounded-xl border-slate-200 w-full" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+          <Input placeholder="Search sites, customers, or locations..." className="pl-10 rounded-xl border-border w-full bg-card text-foreground" />
         </div>
-        <Button variant="outline" className="gap-2 rounded-xl border-slate-200 w-full sm:w-auto">
+        <Button variant="outline" className="gap-2 rounded-xl border-border w-full sm:w-auto bg-card text-muted-foreground hover:bg-muted/50">
           <Filter size={18} />
           Filters
         </Button>
@@ -56,47 +56,47 @@ export function Sites() {
             transition={{ delay: 0.1 * index }}
             whileHover={{ y: -4 }}
           >
-            <Card className="border-none shadow-sm hover:shadow-md transition-shadow group rounded-2xl overflow-hidden bg-white h-full">
+            <Card className="border-none shadow-sm hover:shadow-md transition-shadow group rounded-2xl overflow-hidden bg-card h-full">
             <CardContent className="p-6">
               <div className="flex justify-between items-start mb-6">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-blue-50 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                  <div className="p-3 bg-primary/10 rounded-2xl text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                     <site.icon size={24} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-800">{site.name}</h3>
-                    <p className="text-sm text-slate-500 font-medium">{site.customer}</p>
+                    <h3 className="text-lg font-bold text-foreground">{site.name}</h3>
+                    <p className="text-sm text-muted-foreground font-medium">{site.customer}</p>
                   </div>
                 </div>
                 <Badge className={cn(
                   "text-[10px] font-bold border-none px-3 py-1 rounded-full",
-                  site.status === 'Healthy' ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
+                  site.status === 'Healthy' ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
                 )}>
                   {site.status}
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 py-4 border-y border-slate-50">
+              <div className="grid grid-cols-3 gap-4 py-4 border-y border-border">
                 <div className="text-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Devices</p>
-                  <p className="text-lg font-bold text-slate-700">{site.devices}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Devices</p>
+                  <p className="text-lg font-bold text-foreground">{site.devices}</p>
                 </div>
-                <div className="text-center border-x border-slate-50">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Users</p>
-                  <p className="text-lg font-bold text-slate-700">{site.users}</p>
+                <div className="text-center border-x border-border">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Users</p>
+                  <p className="text-lg font-bold text-foreground">{site.users}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">SLA</p>
-                  <p className="text-lg font-bold text-emerald-600">99.9%</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">SLA</p>
+                  <p className="text-lg font-bold text-emerald-500">99.9%</p>
                 </div>
               </div>
 
               <div className="mt-6 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-slate-400">
+                <div className="flex items-center gap-2 text-muted-foreground">
                   <MapPin size={14} />
                   <span className="text-xs font-medium">{site.location}</span>
                 </div>
-                <Button variant="ghost" size="sm" className="text-blue-600 font-bold hover:bg-blue-50">
+                <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10">
                   View Details
                 </Button>
               </div>

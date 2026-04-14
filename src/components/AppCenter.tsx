@@ -59,19 +59,19 @@ export function AppCenter() {
   ];
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-[#f8f9fa] min-h-screen animate-in fade-in duration-500">
+    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-800">App Center</h1>
-          <p className="text-sm text-slate-500">Discover and manage integrations and third-party applications.</p>
+          <h1 className="text-2xl lg:text-3xl font-bold text-foreground tracking-tight">App Center</h1>
+          <p className="text-sm text-muted-foreground font-medium">Discover and manage integrations and third-party applications.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
-          <Button variant="outline" className="rounded-full px-6 border-slate-200 font-bold w-full sm:w-auto">My Integrations</Button>
-          <Button className="bg-[#003d33] hover:bg-[#002b24] text-white rounded-full px-6 gap-2 w-full sm:w-auto">
+          <Button variant="outline" className="rounded-xl px-6 border-border font-bold w-full sm:w-auto bg-card text-muted-foreground hover:bg-muted/50">My Integrations</Button>
+          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 h-11 font-bold shadow-lg shadow-primary/10 transition-all hover:scale-[1.02] w-full sm:w-auto">
             <Plus size={18} />
             Browse Marketplace
           </Button>
@@ -87,11 +87,11 @@ export function AppCenter() {
             transition={{ delay: 0.1 * index }}
             whileHover={{ y: -4 }}
           >
-            <Card className="border-none shadow-sm hover:shadow-md transition-all group overflow-hidden bg-white rounded-2xl h-full">
+            <Card className="border-none shadow-sm hover:shadow-md transition-all group overflow-hidden bg-card rounded-2xl h-full">
             <CardContent className="p-0">
               <div className="p-6">
                 <div className="flex justify-between items-start mb-6">
-                  <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center p-3 group-hover:bg-white transition-colors border border-slate-100">
+                  <div className="w-16 h-16 bg-muted/20 rounded-2xl flex items-center justify-center p-3 group-hover:bg-muted/30 transition-colors border border-border">
                     <img 
                       src={app.logo} 
                       alt={app.name} 
@@ -101,16 +101,16 @@ export function AppCenter() {
                   </div>
                   <Badge className={cn(
                     "text-[10px] font-bold border-none px-3 py-1 rounded-full",
-                    app.status === 'Installed' ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"
+                    app.status === 'Installed' ? "bg-emerald-500/10 text-emerald-500" : "bg-primary/10 text-primary"
                   )}>
                     {app.status}
                   </Badge>
                 </div>
-                <h3 className="text-lg font-bold text-slate-800">{app.name}</h3>
-                <p className="text-xs text-slate-500 font-medium mb-6">{app.developer}</p>
-                <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{app.category}</span>
-                  <Button variant="ghost" size="sm" className="text-blue-600 font-bold hover:bg-blue-50 h-9 px-4 rounded-xl">
+                <h3 className="text-lg font-bold text-foreground">{app.name}</h3>
+                <p className="text-xs text-muted-foreground font-medium mb-6">{app.developer}</p>
+                <div className="flex items-center justify-between pt-4 border-t border-border">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{app.category}</span>
+                  <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10 h-9 px-4 rounded-xl">
                     {app.status === 'Installed' ? 'Manage' : 'Install'}
                   </Button>
                 </div>

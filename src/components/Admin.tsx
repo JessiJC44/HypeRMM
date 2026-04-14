@@ -22,19 +22,19 @@ export function Admin() {
   ];
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-slate-50/50 min-h-screen animate-in fade-in duration-500">
+    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-brand-navy tracking-tight">Admin Settings</h1>
-          <p className="text-sm text-slate-500 font-medium">Configure your global account settings, security, and billing.</p>
+          <h1 className="text-2xl lg:text-3xl font-bold text-foreground tracking-tight">Admin Settings</h1>
+          <p className="text-sm text-muted-foreground font-medium">Configure your global account settings, security, and billing.</p>
         </div>
         <Button 
           onClick={() => toast.success("Settings saved successfully")}
-          className="bg-brand-navy hover:bg-brand-navy/90 text-white rounded-xl px-8 h-11 font-bold shadow-lg shadow-brand-navy/10 transition-all hover:scale-[1.02] w-full sm:w-auto"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 h-11 font-bold shadow-lg shadow-primary/10 transition-all hover:scale-[1.02] w-full sm:w-auto"
         >
           Save Changes
         </Button>
@@ -54,10 +54,10 @@ export function Admin() {
                 onClick={() => setActiveTab(item.id)}
                 className={cn(
                   "flex items-center gap-4 px-5 py-3.5 rounded-2xl text-[13px] font-black uppercase tracking-widest transition-all duration-200 whitespace-nowrap",
-                  activeTab === item.id ? "bg-brand-blue/10 text-brand-blue shadow-sm" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  activeTab === item.id ? "bg-primary/10 text-primary shadow-sm" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                 )}
               >
-                <item.icon size={18} className={activeTab === item.id ? "text-brand-blue" : "text-slate-400"} />
+                <item.icon size={18} className={activeTab === item.id ? "text-primary" : "text-muted-foreground"} />
                 {item.label}
               </button>
             ))}
@@ -72,88 +72,135 @@ export function Admin() {
         >
           {activeTab === 'general' && (
             <Card className="border-none shadow-sm rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/30 px-8 py-6">
-                <CardTitle className="text-lg font-black text-brand-navy tracking-tight uppercase tracking-widest text-xs">Account Information</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 lg:p-8 space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:gap-8">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Company Name</label>
-                    <Input defaultValue="HypeRemote Solutions" className="h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white font-bold text-brand-navy" />
+                <CardHeader className="border-b border-border bg-muted/30 px-8 py-6">
+                  <CardTitle className="text-lg font-black text-foreground tracking-tight uppercase tracking-widest text-xs">Account Information</CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 lg:p-8 space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:gap-8">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Company Name</label>
+                      <Input defaultValue="HypeRemote Solutions" className="h-12 rounded-xl border-border bg-muted/20 focus:bg-background font-bold text-foreground" />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Primary Domain</label>
+                      <Input defaultValue="hyperemote.com" className="h-12 rounded-xl border-border bg-muted/20 focus:bg-background font-bold text-foreground" />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Admin Email</label>
+                      <Input defaultValue="admin@hyperemote.com" className="h-12 rounded-xl border-border bg-muted/20 focus:bg-background font-bold text-foreground" />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Time Zone</label>
+                      <Input defaultValue="(GMT-05:00) Eastern Time" className="h-12 rounded-xl border-border bg-muted/20 focus:bg-background font-bold text-foreground" />
+                    </div>
                   </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Primary Domain</label>
-                    <Input defaultValue="hyperemote.com" className="h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white font-bold text-brand-navy" />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Admin Email</label>
-                    <Input defaultValue="admin@hyperemote.com" className="h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white font-bold text-brand-navy" />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Time Zone</label>
-                    <Input defaultValue="(GMT-05:00) Eastern Time" className="h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white font-bold text-brand-navy" />
-                  </div>
-                </div>
-              </CardContent>
+                </CardContent>
             </Card>
           )}
 
           {activeTab === 'security' && (
-            <Card className="border-none shadow-sm rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/30 px-8 py-6">
-                <CardTitle className="text-lg font-black text-brand-navy tracking-tight uppercase tracking-widest text-xs">Security Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="p-8 space-y-8">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-5">
-                    <div className="p-4 bg-brand-green/10 rounded-2xl text-brand-green shadow-lg shadow-brand-green/5">
-                      <Smartphone size={24} strokeWidth={2.5} />
+            <div className="space-y-6">
+              <Card className="border-none shadow-sm rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <CardHeader className="border-b border-border bg-muted/30 px-8 py-6">
+                  <CardTitle className="text-lg font-black text-foreground tracking-tight uppercase tracking-widest text-xs">Security Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="p-8 space-y-8">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-5">
+                      <div className="p-4 bg-primary/10 rounded-2xl text-primary shadow-lg shadow-primary/5">
+                        <Smartphone size={24} strokeWidth={2.5} />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-foreground tracking-tight">Two-Factor Authentication</h4>
+                        <p className="text-xs text-muted-foreground font-bold mt-0.5">Add an extra layer of security to your account.</p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-black text-brand-navy tracking-tight">Two-Factor Authentication</h4>
-                      <p className="text-xs text-slate-500 font-bold mt-0.5">Add an extra layer of security to your account.</p>
-                    </div>
+                    <Badge className="bg-primary/10 text-primary border-none font-black uppercase text-[10px] tracking-widest px-4 py-1.5 rounded-full">Enabled</Badge>
                   </div>
-                  <Badge className="bg-brand-green/10 text-brand-green border-none font-black uppercase text-[10px] tracking-widest px-4 py-1.5 rounded-full">Enabled</Badge>
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-5">
-                    <div className="p-4 bg-brand-blue/10 rounded-2xl text-brand-blue shadow-lg shadow-brand-blue/5">
-                      <Lock size={24} strokeWidth={2.5} />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-5">
+                      <div className="p-4 bg-primary/10 rounded-2xl text-primary shadow-lg shadow-primary/5">
+                        <Lock size={24} strokeWidth={2.5} />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-foreground tracking-tight">Password Policy</h4>
+                        <p className="text-xs text-muted-foreground font-bold mt-0.5">Enforce strong passwords for all team members.</p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-black text-brand-navy tracking-tight">Password Policy</h4>
-                      <p className="text-xs text-slate-500 font-bold mt-0.5">Enforce strong passwords for all team members.</p>
-                    </div>
+                    <Button variant="outline" size="sm" className="rounded-xl font-black uppercase text-[10px] tracking-widest border-border text-muted-foreground h-10 px-6 hover:bg-muted/50">Configure</Button>
                   </div>
-                  <Button variant="outline" size="sm" className="rounded-xl font-black uppercase text-[10px] tracking-widest border-slate-200 text-slate-500 h-10 px-6 hover:bg-slate-50">Configure</Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              <Card className="border-none shadow-sm rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 bg-card">
+                <CardHeader className="border-b border-border bg-muted/30 px-8 py-6">
+                  <CardTitle className="text-lg font-black text-foreground tracking-tight uppercase tracking-widest text-xs">MFA Methods</CardTitle>
+                </CardHeader>
+                <CardContent className="p-8 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                      { id: 'email', label: 'Email Verification', icon: Mail, status: 'Active', desc: 'Code sent to your primary email' },
+                      { id: 'sms', label: 'SMS Verification', icon: Smartphone, status: 'Not Linked', desc: 'Code sent to your mobile phone' },
+                      { id: 'google', label: 'Google Authenticator', icon: Shield, status: 'Not Linked', desc: 'Time-based OTP from Google App' },
+                      { id: 'microsoft', label: 'Microsoft Authenticator', icon: Shield, status: 'Not Linked', desc: 'Push notification or code' },
+                    ].map((method) => (
+                      <div key={method.id} className="p-5 rounded-2xl border border-border bg-card hover:border-brand-blue/30 transition-all group">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className={cn(
+                            "p-3 rounded-xl",
+                            method.status === 'Active' ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                          )}>
+                            <method.icon size={20} />
+                          </div>
+                          <Badge variant="outline" className={cn(
+                            "rounded-full text-[9px] font-black uppercase tracking-widest px-2",
+                            method.status === 'Active' ? "border-primary text-primary" : "border-border text-muted-foreground"
+                          )}>
+                            {method.status}
+                          </Badge>
+                        </div>
+                        <h5 className="text-sm font-black text-foreground">{method.label}</h5>
+                        <p className="text-[10px] text-muted-foreground font-bold mt-1 mb-4">{method.desc}</p>
+                        <Button 
+                          variant={method.status === 'Active' ? "ghost" : "outline"}
+                          className={cn(
+                            "w-full h-9 rounded-xl font-black uppercase text-[9px] tracking-widest",
+                            method.status === 'Active' ? "text-rose-500 hover:bg-rose-500/10" : "border-primary text-primary hover:bg-primary/5"
+                          )}
+                          onClick={() => toast.info(`Linking ${method.label}...`)}
+                        >
+                          {method.status === 'Active' ? 'Disable' : 'Link Method'}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {activeTab === 'billing' && (
-            <Card className="border-none shadow-sm rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/30 px-8 py-6">
-                <CardTitle className="text-lg font-black text-brand-navy tracking-tight uppercase tracking-widest text-xs">Billing & Subscription</CardTitle>
+            <Card className="border-none shadow-sm rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 bg-card">
+              <CardHeader className="border-b border-border bg-muted/30 px-8 py-6">
+                <CardTitle className="text-lg font-black text-foreground tracking-tight uppercase tracking-widest text-xs">Billing & Subscription</CardTitle>
               </CardHeader>
               <CardContent className="p-8 space-y-8">
-                <div className="flex items-center justify-between p-6 bg-slate-50 rounded-2xl">
+                <div className="flex items-center justify-between p-6 bg-muted/20 rounded-2xl border border-border">
                   <div>
-                    <h4 className="font-black text-brand-navy">Current Plan: Enterprise</h4>
-                    <p className="text-xs text-slate-500 font-bold mt-1">Next billing date: April 20, 2026</p>
+                    <h4 className="font-black text-foreground">Current Plan: Enterprise</h4>
+                    <p className="text-xs text-muted-foreground font-bold mt-1">Next billing date: April 20, 2026</p>
                   </div>
-                  <Button className="bg-brand-blue hover:bg-brand-blue/90 text-white rounded-xl font-black uppercase text-[10px] tracking-widest h-10 px-6">Upgrade Plan</Button>
+                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-black uppercase text-[10px] tracking-widest h-10 px-6">Upgrade Plan</Button>
                 </div>
                 <div className="space-y-4">
-                  <h4 className="text-sm font-black text-brand-navy uppercase tracking-widest">Payment Methods</h4>
-                  <div className="flex items-center justify-between p-4 border border-slate-100 rounded-xl">
+                  <h4 className="text-sm font-black text-foreground uppercase tracking-widest">Payment Methods</h4>
+                  <div className="flex items-center justify-between p-4 border border-border rounded-xl bg-muted/10">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-8 bg-slate-100 rounded flex items-center justify-center font-bold text-[10px]">VISA</div>
-                      <span className="text-sm font-bold text-slate-600">•••• 4242</span>
+                      <div className="w-12 h-8 bg-muted rounded flex items-center justify-center font-bold text-[10px] text-foreground">VISA</div>
+                      <span className="text-sm font-bold text-muted-foreground">•••• 4242</span>
                     </div>
-                    <Badge variant="outline" className="rounded-full text-[10px] font-black uppercase tracking-widest">Primary</Badge>
+                    <Badge variant="outline" className="rounded-full text-[10px] font-black uppercase tracking-widest border-border text-muted-foreground">Primary</Badge>
                   </div>
                 </div>
               </CardContent>
@@ -161,31 +208,31 @@ export function Admin() {
           )}
 
           {activeTab === 'users' && (
-            <Card className="border-none shadow-sm rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/30 px-8 py-6">
+            <Card className="border-none shadow-sm rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 bg-card">
+              <CardHeader className="border-b border-border bg-muted/30 px-8 py-6">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-black text-brand-navy tracking-tight uppercase tracking-widest text-xs">User Management</CardTitle>
-                  <Button size="sm" className="bg-brand-blue hover:bg-brand-blue/90 text-white rounded-xl font-black uppercase text-[10px] tracking-widest h-9 px-4">Add User</Button>
+                  <CardTitle className="text-lg font-black text-foreground tracking-tight uppercase tracking-widest text-xs">User Management</CardTitle>
+                  <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-black uppercase text-[10px] tracking-widest h-9 px-4">Add User</Button>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="divide-y divide-slate-50">
+                <div className="divide-y divide-border">
                   {[
                     { name: 'John Doe', email: 'john@hyperemote.com', role: 'Admin' },
                     { name: 'Jane Smith', email: 'jane@hyperemote.com', role: 'Technician' },
                     { name: 'Mike Ross', email: 'mike@hyperemote.com', role: 'Viewer' },
                   ].map((user) => (
-                    <div key={user.email} className="p-6 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
+                    <div key={user.email} className="p-6 flex items-center justify-between hover:bg-muted/20 transition-colors">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-brand-blue/10 text-brand-blue rounded-full flex items-center justify-center font-black text-sm">
+                        <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center font-black text-sm">
                           {user.name.charAt(0)}
                         </div>
                         <div>
-                          <h4 className="text-sm font-black text-brand-navy">{user.name}</h4>
-                          <p className="text-xs text-slate-400 font-bold">{user.email}</p>
+                          <h4 className="text-sm font-black text-foreground">{user.name}</h4>
+                          <p className="text-xs text-muted-foreground font-bold">{user.email}</p>
                         </div>
                       </div>
-                      <Badge variant="outline" className="rounded-full text-[10px] font-black uppercase tracking-widest">{user.role}</Badge>
+                      <Badge variant="outline" className="rounded-full text-[10px] font-black uppercase tracking-widest border-border text-muted-foreground">{user.role}</Badge>
                     </div>
                   ))}
                 </div>
@@ -194,34 +241,34 @@ export function Admin() {
           )}
 
           {activeTab === 'api' && (
-            <Card className="border-none shadow-sm rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/30 px-8 py-6">
+            <Card className="border-none shadow-sm rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 bg-card">
+              <CardHeader className="border-b border-border bg-muted/30 px-8 py-6">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-black text-brand-navy tracking-tight uppercase tracking-widest text-xs">API & Webhooks</CardTitle>
-                  <Button size="sm" className="bg-brand-blue hover:bg-brand-blue/90 text-white rounded-xl font-black uppercase text-[10px] tracking-widest h-9 px-4">Generate Key</Button>
+                  <CardTitle className="text-lg font-black text-foreground tracking-tight uppercase tracking-widest text-xs">API & Webhooks</CardTitle>
+                  <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-black uppercase text-[10px] tracking-widest h-9 px-4">Generate Key</Button>
                 </div>
               </CardHeader>
               <CardContent className="p-8 space-y-8">
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border border-border">
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-black text-brand-navy">Production API Key</h4>
-                      <p className="text-xs font-mono text-slate-400 mt-1 truncate">hp_live_••••••••••••••••••••••••</p>
+                      <h4 className="text-sm font-black text-foreground">Production API Key</h4>
+                      <p className="text-xs font-mono text-muted-foreground mt-1 truncate">hp_live_••••••••••••••••••••••••</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-slate-400 hover:text-brand-blue" onClick={() => toast.success("API Key copied")}>
+                      <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-primary" onClick={() => toast.success("API Key copied")}>
                         <Copy size={16} />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-500">
+                      <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-rose-500">
                         <Trash2 size={16} />
                       </Button>
                     </div>
                   </div>
                 </div>
                 <div className="space-y-4">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Webhooks</h4>
-                  <div className="text-center py-8 border-2 border-dashed border-slate-100 rounded-2xl">
-                    <p className="text-sm text-slate-400 font-bold">No webhooks configured</p>
+                  <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Webhooks</h4>
+                  <div className="text-center py-8 border-2 border-dashed border-border rounded-2xl">
+                    <p className="text-sm text-muted-foreground font-bold">No webhooks configured</p>
                     <Button variant="link" className="text-brand-blue font-black uppercase text-[10px] tracking-widest mt-2">Add Webhook Endpoint</Button>
                   </div>
                 </div>
@@ -230,48 +277,48 @@ export function Admin() {
           )}
 
           {activeTab === 'backup' && (
-            <Card className="border-none shadow-sm rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/30 px-8 py-6">
-                <CardTitle className="text-lg font-black text-brand-navy tracking-tight uppercase tracking-widest text-xs">Backup & Restore</CardTitle>
+            <Card className="border-none shadow-sm rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 bg-card">
+              <CardHeader className="border-b border-border bg-muted/30 px-8 py-6">
+                <CardTitle className="text-lg font-black text-foreground tracking-tight uppercase tracking-widest text-xs">Backup & Restore</CardTitle>
               </CardHeader>
               <CardContent className="p-8 space-y-8">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="p-6 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-4">
-                    <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-brand-blue">
+                  <div className="p-6 rounded-2xl border border-border bg-muted/10 space-y-4">
+                    <div className="w-12 h-12 bg-card rounded-xl shadow-sm flex items-center justify-center text-primary border border-border">
                       <Database size={24} />
                     </div>
                     <div>
-                      <h4 className="font-black text-brand-navy">Automated Backups</h4>
-                      <p className="text-xs text-slate-500 font-bold mt-1">Daily backups are enabled and stored securely.</p>
+                      <h4 className="font-black text-foreground">Automated Backups</h4>
+                      <p className="text-xs text-muted-foreground font-bold mt-1">Daily backups are enabled and stored securely.</p>
                     </div>
-                    <Button variant="outline" className="w-full rounded-xl font-black uppercase text-[10px] tracking-widest h-10">Configure Schedule</Button>
+                    <Button variant="outline" className="w-full rounded-xl font-black uppercase text-[10px] tracking-widest h-10 border-border text-muted-foreground">Configure Schedule</Button>
                   </div>
-                  <div className="p-6 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-4">
-                    <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-brand-green">
+                  <div className="p-6 rounded-2xl border border-border bg-muted/10 space-y-4">
+                    <div className="w-12 h-12 bg-card rounded-xl shadow-sm flex items-center justify-center text-primary border border-border">
                       <RefreshCw size={24} />
                     </div>
                     <div>
-                      <h4 className="font-black text-brand-navy">Manual Restore</h4>
-                      <p className="text-xs text-slate-500 font-bold mt-1">Restore your system to a previous state.</p>
+                      <h4 className="font-black text-foreground">Manual Restore</h4>
+                      <p className="text-xs text-muted-foreground font-bold mt-1">Restore your system to a previous state.</p>
                     </div>
-                    <Button variant="outline" className="w-full rounded-xl font-black uppercase text-[10px] tracking-widest h-10">Restore Now</Button>
+                    <Button variant="outline" className="w-full rounded-xl font-black uppercase text-[10px] tracking-widest h-10 border-border text-muted-foreground">Restore Now</Button>
                   </div>
                 </div>
                 <div className="space-y-4">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Recent Backups</h4>
-                  <div className="divide-y divide-slate-50 border rounded-2xl overflow-hidden">
+                  <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Recent Backups</h4>
+                  <div className="divide-y divide-border border border-border rounded-2xl overflow-hidden">
                     {[
                       { date: '2026-04-12 03:00 AM', size: '1.2 GB', status: 'Success' },
                       { date: '2026-04-11 03:00 AM', size: '1.1 GB', status: 'Success' },
                     ].map((backup) => (
-                      <div key={backup.date} className="p-4 flex items-center justify-between bg-white">
+                      <div key={backup.date} className="p-4 flex items-center justify-between bg-card">
                         <div>
-                          <p className="text-sm font-bold text-brand-navy">{backup.date}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{backup.size}</p>
+                          <p className="text-sm font-bold text-foreground">{backup.date}</p>
+                          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">{backup.size}</p>
                         </div>
                         <div className="flex items-center gap-3">
-                          <Badge className="bg-brand-green/10 text-brand-green border-none font-black uppercase text-[10px] tracking-widest px-3 py-1 rounded-full">{backup.status}</Badge>
-                          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-slate-400 hover:text-brand-blue">
+                          <Badge className="bg-primary/10 text-primary border-none font-black uppercase text-[10px] tracking-widest px-3 py-1 rounded-full">{backup.status}</Badge>
+                          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-primary">
                             <Download size={16} />
                           </Button>
                         </div>

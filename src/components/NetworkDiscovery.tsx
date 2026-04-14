@@ -16,20 +16,20 @@ export function NetworkDiscovery() {
   };
 
   return (
-    <div className="p-8 space-y-8 bg-[#f8f9fa] min-h-screen animate-in fade-in duration-500">
+    <div className="p-8 space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Network Discovery</h1>
-          <p className="text-sm text-slate-500">Scan your network to find and manage unmanaged devices.</p>
+          <h1 className="text-2xl font-bold text-foreground">Network Discovery</h1>
+          <p className="text-sm text-muted-foreground">Scan your network to find and manage unmanaged devices.</p>
         </div>
         <Button 
           onClick={startScan} 
           disabled={isScanning}
-          className="bg-[#003d33] hover:bg-[#002b24] text-white rounded-full px-6 gap-2"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 gap-2"
         >
           {isScanning ? <RefreshCw size={18} className="animate-spin" /> : <Search size={18} />}
           {isScanning ? 'Scanning Network...' : 'Start New Scan'}
@@ -48,14 +48,14 @@ export function NetworkDiscovery() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1 * index }}
           >
-            <Card className="border-none shadow-sm h-full">
+            <Card className="border-none shadow-sm h-full bg-card">
               <CardContent className="p-6">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{stat.label}</p>
-                <h3 className="text-3xl font-bold text-slate-800 mt-1">{stat.value}</h3>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{stat.label}</p>
+                <h3 className="text-3xl font-bold text-foreground mt-1">{stat.value}</h3>
                 <p className={cn(
                   "text-[10px] font-bold mt-2 flex items-center gap-1",
-                  stat.color === 'emerald' ? "text-emerald-600" :
-                  stat.color === 'blue' ? "text-blue-600" : "text-rose-600"
+                  stat.color === 'emerald' ? "text-emerald-500" :
+                  stat.color === 'blue' ? "text-primary" : "text-rose-500"
                 )}>
                   <stat.icon size={12} />
                   {stat.desc}
@@ -70,27 +70,27 @@ export function NetworkDiscovery() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.4 }}
-        className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto"
+        className="bg-card rounded-2xl shadow-sm border border-border overflow-x-auto"
       >
         <div className="min-w-[800px]">
-          <div className="p-6 border-b flex items-center justify-between">
-            <h3 className="font-bold text-slate-800">Discovered Devices List</h3>
+          <div className="p-6 border-b border-border flex items-center justify-between">
+            <h3 className="font-bold text-foreground">Discovered Devices List</h3>
             <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <Input className="pl-9 rounded-xl border-slate-200" placeholder="Filter devices..." />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+              <Input className="pl-9 rounded-xl border-border bg-muted/20 text-foreground" placeholder="Filter devices..." />
             </div>
           </div>
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 text-left">
-                <th className="py-4 px-6 font-bold text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap">Device Name</th>
-                <th className="py-4 px-6 font-bold text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap">IP Address</th>
-                <th className="py-4 px-6 font-bold text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap">Type</th>
-                <th className="py-4 px-6 font-bold text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap">Manufacturer</th>
-                <th className="py-4 px-6 font-bold text-slate-400 text-xs uppercase tracking-wider text-right whitespace-nowrap">Actions</th>
+              <tr className="bg-muted/30 text-left">
+                <th className="py-4 px-6 font-bold text-muted-foreground text-xs uppercase tracking-wider whitespace-nowrap">Device Name</th>
+                <th className="py-4 px-6 font-bold text-muted-foreground text-xs uppercase tracking-wider whitespace-nowrap">IP Address</th>
+                <th className="py-4 px-6 font-bold text-muted-foreground text-xs uppercase tracking-wider whitespace-nowrap">Type</th>
+                <th className="py-4 px-6 font-bold text-muted-foreground text-xs uppercase tracking-wider whitespace-nowrap">Manufacturer</th>
+                <th className="py-4 px-6 font-bold text-muted-foreground text-xs uppercase tracking-wider text-right whitespace-nowrap">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-border">
               {[
                 { name: 'DESKTOP-H82K9L', ip: '192.168.1.45', type: 'Workstation', mfg: 'Dell Inc.' },
                 { name: 'PRINTER-OFFICE', ip: '192.168.1.12', type: 'Printer', mfg: 'HP' },
@@ -103,16 +103,16 @@ export function NetworkDiscovery() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5 + (i * 0.05) }}
-                  className="hover:bg-slate-50/50 transition-colors"
+                  className="hover:bg-muted/20 transition-colors"
                 >
-                  <td className="py-4 px-6 font-bold text-slate-700 whitespace-nowrap">{device.name}</td>
-                  <td className="py-4 px-6 text-slate-500 font-medium whitespace-nowrap">{device.ip}</td>
+                  <td className="py-4 px-6 font-bold text-foreground whitespace-nowrap">{device.name}</td>
+                  <td className="py-4 px-6 text-muted-foreground font-medium whitespace-nowrap">{device.ip}</td>
                   <td className="py-4 px-6 whitespace-nowrap">
-                    <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none text-[10px] font-bold">{device.type}</Badge>
+                    <Badge variant="secondary" className="bg-muted text-muted-foreground border-none text-[10px] font-bold">{device.type}</Badge>
                   </td>
-                  <td className="py-4 px-6 text-slate-500 font-medium whitespace-nowrap">{device.mfg}</td>
+                  <td className="py-4 px-6 text-muted-foreground font-medium whitespace-nowrap">{device.mfg}</td>
                   <td className="py-4 px-6 text-right whitespace-nowrap">
-                    <Button variant="ghost" size="sm" className="text-blue-600 font-bold hover:bg-blue-50 gap-2">
+                    <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10 gap-2">
                       <Plus size={14} />
                       Install Agent
                     </Button>

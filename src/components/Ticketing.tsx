@@ -111,15 +111,15 @@ export function Ticketing() {
   };
 
   return (
-    <div className="space-y-6 p-4 lg:p-8 bg-slate-50/50 min-h-screen animate-in fade-in duration-500">
+    <div className="space-y-6 p-4 lg:p-8 bg-background min-h-screen animate-in fade-in duration-500">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-brand-navy tracking-tight">Ticketing System</h1>
-          <p className="text-sm text-slate-500 font-medium">Manage and track IT support requests from all customers.</p>
+          <h1 className="text-2xl lg:text-3xl font-bold text-foreground tracking-tight">Ticketing System</h1>
+          <p className="text-sm text-muted-foreground font-medium">Manage and track IT support requests from all customers.</p>
         </div>
         
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -128,7 +128,7 @@ export function Ticketing() {
               <TooltipTrigger asChild>
                 <DialogTrigger
                   render={
-                    <Button className="bg-brand-navy hover:bg-brand-navy/90 text-white rounded-xl px-6 h-11 font-bold shadow-lg shadow-brand-navy/10 gap-2 transition-all hover:scale-[1.02] active:scale-95 w-full sm:w-auto">
+                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-6 h-11 font-bold shadow-lg shadow-primary/10 gap-2 transition-all hover:scale-[1.02] active:scale-95 w-full sm:w-auto">
                       <Plus size={18} />
                       New Ticket
                     </Button>
@@ -140,62 +140,65 @@ export function Ticketing() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[425px] bg-card border-border">
             <DialogHeader>
-              <DialogTitle>Create New Ticket</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-foreground">Create New Ticket</DialogTitle>
+              <DialogDescription className="text-muted-foreground">
                 Fill in the details to open a new support request.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAddTicket} className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <label htmlFor="title" className="text-sm font-medium">Issue Title</label>
+                <label htmlFor="title" className="text-sm font-medium text-foreground">Issue Title</label>
                 <Input 
                   id="title" 
                   value={newTicket.title}
                   onChange={(e) => setNewTicket({...newTicket, title: e.target.value})}
                   placeholder="e.g. Cannot connect to VPN" 
+                  className="bg-muted/20 border-border text-foreground"
                   required 
                 />
               </div>
               <div className="grid gap-2">
-                <label htmlFor="customer" className="text-sm font-medium">Customer Name</label>
+                <label htmlFor="customer" className="text-sm font-medium text-foreground">Customer Name</label>
                 <Input 
                   id="customer" 
                   value={newTicket.customer}
                   onChange={(e) => setNewTicket({...newTicket, customer: e.target.value})}
                   placeholder="e.g. Acme Corp" 
+                  className="bg-muted/20 border-border text-foreground"
                   required 
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <label htmlFor="priority" className="text-sm font-medium">Priority</label>
+                  <label htmlFor="priority" className="text-sm font-medium text-foreground">Priority</label>
                   <select 
                     id="priority"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="flex h-10 w-full rounded-md border border-border bg-muted/20 px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 text-foreground"
                     value={newTicket.priority}
                     onChange={(e) => setNewTicket({...newTicket, priority: e.target.value})}
                   >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
+                    <option value="low" className="bg-card">Low</option>
+                    <option value="medium" className="bg-card">Medium</option>
+                    <option value="high" className="bg-card">High</option>
+                    <option value="critical" className="bg-card">Critical</option>
                   </select>
                 </div>
                 <div className="grid gap-2">
-                  <label htmlFor="assigned" className="text-sm font-medium">Assign To</label>
+                  <label htmlFor="assigned" className="text-sm font-medium text-foreground">Assign To</label>
                   <Input 
                     id="assigned" 
                     value={newTicket.assignedTo}
                     onChange={(e) => setNewTicket({...newTicket, assignedTo: e.target.value})}
                     placeholder="Staff Name" 
+                    className="bg-muted/20 border-border text-foreground"
                     required 
                   />
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit">Create Ticket</Button>
+                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90">Create Ticket</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -213,8 +216,8 @@ export function Ticketing() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <Input placeholder="Search tickets..." className="pl-12 h-12 rounded-xl border-slate-200 bg-white shadow-sm focus:ring-brand-blue" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                  <Input placeholder="Search tickets..." className="pl-12 h-12 rounded-xl border-border bg-card shadow-sm focus:ring-primary text-foreground" />
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom">
@@ -226,7 +229,7 @@ export function Ticketing() {
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" className="gap-2 h-12 px-6 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:bg-slate-50 transition-all hover:scale-[1.02] w-full sm:w-auto">
+              <Button variant="outline" className="gap-2 h-12 px-6 rounded-xl border-border bg-card font-bold text-muted-foreground hover:bg-muted/50 transition-all hover:scale-[1.02] w-full sm:w-auto">
                 <Filter size={18} />
                 Filters
               </Button>
@@ -242,19 +245,19 @@ export function Ticketing() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.3 }}
-        className="rounded-2xl border-none bg-white overflow-x-auto shadow-sm"
+        className="rounded-2xl border border-border bg-card overflow-x-auto shadow-sm"
       >
         <div className="min-w-[1000px]">
           <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/80 border-b border-slate-100">
-              <TableHead className="w-[100px] text-[10px] font-black uppercase tracking-widest text-slate-400 py-4 whitespace-nowrap">ID</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4 whitespace-nowrap">Ticket Details</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4 whitespace-nowrap">Customer</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4 whitespace-nowrap">Status</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4 whitespace-nowrap">Priority</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4 whitespace-nowrap">Assigned To</TableHead>
-              <TableHead className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400 py-4 whitespace-nowrap">Actions</TableHead>
+            <TableRow className="bg-muted/30 border-b border-border">
+              <TableHead className="w-[100px] text-[10px] font-black uppercase tracking-widest text-muted-foreground py-4 whitespace-nowrap">ID</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground py-4 whitespace-nowrap">Ticket Details</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground py-4 whitespace-nowrap">Customer</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground py-4 whitespace-nowrap">Status</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground py-4 whitespace-nowrap">Priority</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground py-4 whitespace-nowrap">Assigned To</TableHead>
+              <TableHead className="text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground py-4 whitespace-nowrap">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -262,14 +265,14 @@ export function Ticketing() {
               <TableRow>
                 <TableCell colSpan={7} className="h-32 text-center">
                   <div className="flex flex-col items-center justify-center gap-3">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue"></div>
-                    <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Loading tickets...</span>
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                    <span className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Loading tickets...</span>
                   </div>
                 </TableCell>
               </TableRow>
             ) : tickets.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-slate-400 font-bold uppercase tracking-widest">
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground font-bold uppercase tracking-widest">
                   No tickets found.
                 </TableCell>
               </TableRow>
@@ -280,19 +283,19 @@ export function Ticketing() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 + (index * 0.05) }}
-                  className="hover:bg-slate-50/50 border-b border-slate-50 transition-colors group"
+                  className="hover:bg-muted/20 border-b border-border transition-colors group"
                 >
-                <TableCell className="font-mono text-[11px] font-bold text-slate-400 whitespace-nowrap">{ticket.id}</TableCell>
+                <TableCell className="font-mono text-[11px] font-bold text-muted-foreground whitespace-nowrap">{ticket.id}</TableCell>
                 <TableCell className="py-4 whitespace-nowrap">
                   <div className="flex flex-col">
-                    <span className="font-bold text-brand-navy">{ticket.title}</span>
-                    <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 mt-1.5 uppercase tracking-wider">
-                      <Clock size={12} className="text-brand-blue" />
+                    <span className="font-bold text-foreground">{ticket.title}</span>
+                    <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1 mt-1.5 uppercase tracking-wider">
+                      <Clock size={12} className="text-primary" />
                       Opened {new Date(ticket.createdAt).toLocaleDateString()}
                     </span>
                   </div>
                 </TableCell>
-                <TableCell className="font-bold text-slate-600 whitespace-nowrap">{ticket.customer}</TableCell>
+                <TableCell className="font-bold text-muted-foreground whitespace-nowrap">{ticket.customer}</TableCell>
                 <TableCell className="whitespace-nowrap">
                   <Badge variant="outline" className={cn("capitalize rounded-full px-3 py-0.5 font-bold text-[10px] border-none", getStatusColor(ticket.status))}>
                     {ticket.status}
@@ -305,10 +308,10 @@ export function Ticketing() {
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 border border-slate-200">
+                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-[10px] font-black text-muted-foreground border border-border">
                       {ticket.assignedTo.split(' ').map(n => n[0]).join('')}
                     </div>
-                    <span className="text-sm font-bold text-slate-600">{ticket.assignedTo}</span>
+                    <span className="text-sm font-bold text-muted-foreground">{ticket.assignedTo}</span>
                   </div>
                 </TableCell>
                 <TableCell className="text-right whitespace-nowrap">
@@ -319,7 +322,7 @@ export function Ticketing() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-9 w-9 rounded-xl text-slate-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-all"
+                            className="h-9 w-9 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all"
                             onClick={() => toast.info(`Opening chat for ticket ${ticket.id}`)}
                           >
                             <MessageSquare size={18} />
@@ -336,7 +339,7 @@ export function Ticketing() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-9 w-9 rounded-xl text-slate-400 hover:text-brand-navy hover:bg-slate-100 transition-all"
+                            className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
                             onClick={() => toast.info(`Opening options for ticket ${ticket.id}`)}
                           >
                             <MoreVertical size={18} />

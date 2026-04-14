@@ -24,19 +24,19 @@ export function KnowledgeBase() {
   ];
 
   return (
-    <div className="p-8 space-y-8 bg-[#f8f9fa] min-h-screen animate-in fade-in duration-500">
+    <div className="p-8 space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col items-center text-center space-y-4 max-w-2xl mx-auto py-8"
       >
-        <h1 className="text-3xl font-bold text-slate-800">Knowledge Base</h1>
-        <p className="text-slate-500">Search for help articles, video tutorials, and best practices.</p>
+        <h1 className="text-3xl font-bold text-foreground">Knowledge Base</h1>
+        <p className="text-muted-foreground">Search for help articles, video tutorials, and best practices.</p>
         <div className="relative w-full mt-4">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
           <Input 
             placeholder="Search for articles, guides, and more..." 
-            className="pl-12 h-14 rounded-2xl border-slate-200 shadow-sm text-lg focus:ring-blue-500" 
+            className="pl-12 h-14 rounded-2xl border-border bg-card shadow-sm text-lg focus:ring-primary text-foreground" 
           />
         </div>
       </motion.div>
@@ -49,16 +49,16 @@ export function KnowledgeBase() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1 * index }}
           >
-            <Card className="border-none shadow-sm hover:shadow-md transition-all cursor-pointer group h-full">
+            <Card className="border-none shadow-sm hover:shadow-md transition-all cursor-pointer group h-full bg-card">
               <CardContent className="p-6 flex items-center gap-4">
-                <div className="p-3 bg-blue-50 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                <div className="p-3 bg-primary/10 rounded-2xl text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                   <cat.icon size={24} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-bold text-slate-800">{cat.name}</h3>
-                  <p className="text-xs text-slate-500 font-medium">{cat.count} articles</p>
+                  <h3 className="font-bold text-foreground">{cat.name}</h3>
+                  <p className="text-xs text-muted-foreground font-medium">{cat.count} articles</p>
                 </div>
-                <ChevronRight size={18} className="text-slate-300 group-hover:text-blue-600 transition-colors" />
+                <ChevronRight size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
               </CardContent>
             </Card>
           </motion.div>
@@ -72,30 +72,30 @@ export function KnowledgeBase() {
           transition={{ delay: 0.4 }}
           className="space-y-6"
         >
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <FileText size={20} className="text-blue-500" />
+          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <FileText size={20} className="text-primary" />
             Recent Articles
           </h2>
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-50">
+          <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden divide-y divide-border">
             {recentArticles.map((article, index) => (
               <motion.div 
                 key={article.title}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 + (index * 0.1) }}
-                className="p-4 hover:bg-slate-50/50 transition-colors cursor-pointer group"
+                className="p-4 hover:bg-muted/20 transition-colors cursor-pointer group"
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <h4 className="font-bold text-slate-700 group-hover:text-blue-600 transition-colors">{article.title}</h4>
-                    <p className="text-[10px] text-slate-400 font-medium mt-1 uppercase tracking-wider">{article.category} • {article.date}</p>
+                    <h4 className="font-bold text-foreground group-hover:text-primary transition-colors">{article.title}</h4>
+                    <p className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-wider">{article.category} • {article.date}</p>
                   </div>
-                  <ExternalLink size={14} className="text-slate-300" />
+                  <ExternalLink size={14} className="text-muted-foreground" />
                 </div>
               </motion.div>
             ))}
           </div>
-          <Button variant="ghost" className="w-full text-blue-600 font-bold">View All Articles</Button>
+          <Button variant="ghost" className="w-full text-primary font-bold hover:bg-primary/10">View All Articles</Button>
         </motion.div>
 
         <motion.div 
@@ -104,7 +104,7 @@ export function KnowledgeBase() {
           transition={{ delay: 0.4 }}
           className="space-y-6"
         >
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
             <Video size={20} className="text-purple-500" />
             Video Tutorials
           </h2>
@@ -115,7 +115,7 @@ export function KnowledgeBase() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.6 + (index * 0.1) }}
-                className="relative aspect-video bg-slate-200 rounded-2xl overflow-hidden group cursor-pointer"
+                className="relative aspect-video bg-muted rounded-2xl overflow-hidden group cursor-pointer"
               >
                 <img 
                   src={`https://picsum.photos/seed/rmm-video-${i}/640/360`} 
@@ -125,7 +125,7 @@ export function KnowledgeBase() {
                 />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
                   <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
-                    <div className="w-0 h-0 border-t-[8px] border-t-transparent border-l-[12px] border-l-blue-600 border-b-[8px] border-b-transparent ml-1" />
+                    <div className="w-0 h-0 border-t-[8px] border-t-transparent border-l-[12px] border-l-primary border-b-[8px] border-b-transparent ml-1" />
                   </div>
                 </div>
                 <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/60 to-transparent">

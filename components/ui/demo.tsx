@@ -1,11 +1,11 @@
-import {Sidebar} from "@/components/ui/modern-side-bar";
+import ThemeSwitch from "@/components/ui/theme-switch";
+import { useState } from "react";
 
-const DemoOne = () => {
-  return(
-    <div className="flex h-screen w-screen">
-    <Sidebar />
+export default function DemoOne() {
+  const [isDark, setIsDark] = useState(false);
+  return (
+    <div className="p-10 flex items-center justify-center bg-background min-h-screen">
+      <ThemeSwitch checked={isDark} onCheckedChange={setIsDark} />
     </div>
   );
-};
-
-export { DemoOne };
+}

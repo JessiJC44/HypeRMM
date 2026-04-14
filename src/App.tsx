@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { Ticketing } from './components/Ticketing';
-import { Assets } from './components/Assets';
+import { Devices } from './components/Assets';
 import { PatchManagement } from './components/PatchManagement';
 import { SoftwareInventory } from './components/SoftwareInventory';
 import { NetworkDiscovery } from './components/NetworkDiscovery';
@@ -32,7 +32,7 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/comp
 import { Button } from '@/components/ui/button';
 import { useLanguage } from './contexts/LanguageContext';
 import ExampleSwitch from '@/components/ui/switch-1';
-import SkyToggle from '@/components/ui/sky-toggle';
+import ThemeSwitch from '@/components/ui/theme-switch';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -104,7 +104,7 @@ export default function App() {
       case 'tickets':
         return <Ticketing />;
       case 'assets':
-        return <Assets />;
+        return <Devices />;
       case 'alerts':
         return <Alerts />;
       case 'sites':
@@ -146,7 +146,7 @@ export default function App() {
 
   return (
     <TooltipProvider>
-      <div className="flex min-h-screen bg-background text-foreground font-sans antialiased overflow-x-hidden">
+      <div className="flex h-screen bg-background text-foreground font-sans antialiased overflow-hidden">
         <Sidebar 
           activeTab={activeTab} 
           setActiveTab={(tab) => {
@@ -171,8 +171,8 @@ export default function App() {
           )}
         </AnimatePresence>
         
-        <main className="flex-1 min-w-0 flex flex-col">
-          <header className="h-16 lg:h-20 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-4 lg:px-10 shadow-sm">
+        <main className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
+          <header className="h-16 lg:h-20 border-b border-border bg-background/80 backdrop-blur-md flex-shrink-0 z-30 flex items-center justify-between px-4 lg:px-10 shadow-sm">
             <div className="flex items-center gap-3 lg:gap-4">
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -213,7 +213,7 @@ export default function App() {
                 </TooltipContent>
               </Tooltip>
               <div className="hidden md:block">
-                <SkyToggle checked={isDarkMode} onChange={setIsDarkMode} />
+                <ThemeSwitch checked={isDarkMode} onCheckedChange={setIsDarkMode} />
               </div>
               <div className="hidden sm:block h-8 lg:h-10 w-[1px] bg-border" />
               <div className="flex items-center gap-3">
@@ -272,7 +272,7 @@ export default function App() {
             </div>
           </header>
 
-          <div className="flex-1 overflow-x-hidden">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}

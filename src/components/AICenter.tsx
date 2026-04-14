@@ -97,24 +97,24 @@ export function AICenter() {
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] lg:h-[calc(100vh-80px)] bg-slate-50/50">
+    <div className="flex flex-col h-[calc(100vh-64px)] lg:h-[calc(100vh-80px)] bg-background">
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Chat Section */}
-        <div className="flex-1 flex flex-col bg-white border-r">
-          <div className="p-4 border-b flex items-center justify-between bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+        <div className="flex-1 flex flex-col bg-card border-r border-border">
+          <div className="p-4 border-b border-border flex items-center justify-between bg-card/50 backdrop-blur-sm sticky top-0 z-10">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-brand-blue/10 rounded-xl text-brand-blue shadow-sm border border-brand-blue/20">
+              <div className="p-2 bg-primary/10 rounded-xl text-primary shadow-sm border border-primary/20">
                 <Sparkles size={20} className="animate-pulse" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-brand-navy tracking-tight">Assistant IA</h2>
+                <h2 className="text-lg font-bold text-foreground tracking-tight">Assistant IA</h2>
                 <div className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse" />
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">En ligne</span>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">En ligne</span>
                 </div>
               </div>
             </div>
-            <Button variant="ghost" size="sm" className="text-slate-400 hover:text-brand-blue rounded-xl h-9">
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary rounded-xl h-9">
               Effacer l'historique
             </Button>
           </div>
@@ -129,19 +129,19 @@ export function AICenter() {
                   className={`flex gap-3 lg:gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                 >
                   <div className={`w-8 h-8 lg:w-10 lg:h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
-                    msg.role === 'assistant' ? 'bg-brand-navy text-white' : 'bg-brand-blue text-white'
+                    msg.role === 'assistant' ? 'bg-brand-navy text-white' : 'bg-primary text-white'
                   }`}>
                     {msg.role === 'assistant' ? <Bot size={18} /> : <User size={18} />}
                   </div>
                   <div className={`flex flex-col space-y-1 max-w-[85%] ${msg.role === 'user' ? 'items-end' : ''}`}>
                     <div className={`p-3 lg:p-4 rounded-2xl text-sm leading-relaxed shadow-sm border ${
                       msg.role === 'assistant' 
-                        ? 'bg-slate-50 border-slate-100 text-slate-800 rounded-tl-none' 
-                        : 'bg-brand-blue text-white border-brand-blue/20 rounded-tr-none'
+                        ? 'bg-muted/30 border-border text-foreground rounded-tl-none' 
+                        : 'bg-primary text-primary-foreground border-primary/20 rounded-tr-none'
                     }`}>
                       {msg.content}
                     </div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">
                       {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
@@ -156,20 +156,20 @@ export function AICenter() {
                   <div className="w-10 h-10 rounded-2xl bg-brand-navy text-white flex items-center justify-center shrink-0 shadow-sm">
                     <Bot size={18} />
                   </div>
-                  <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
-                    <Loader2 size={16} className="animate-spin text-brand-blue" />
-                    <span className="text-sm text-slate-500 font-medium italic">L'IA réfléchit...</span>
+                  <div className="bg-muted/30 border border-border p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
+                    <Loader2 size={16} className="animate-spin text-primary" />
+                    <span className="text-sm text-muted-foreground font-medium italic">L'IA réfléchit...</span>
                   </div>
                 </motion.div>
               )}
             </div>
           </ScrollArea>
 
-          <div className="p-4 lg:p-6 border-t bg-slate-50/50">
+          <div className="p-4 lg:p-6 border-t border-border bg-muted/10">
             <div className="max-w-3xl mx-auto relative">
               <Input
                 placeholder="Posez une question sur votre infrastructure..."
-                className="pr-14 h-14 rounded-2xl border-slate-200 bg-white shadow-lg focus:ring-2 focus:ring-brand-blue/20 text-sm font-medium"
+                className="pr-14 h-14 rounded-2xl border-border bg-card shadow-lg focus:ring-2 focus:ring-primary/20 text-sm font-medium text-foreground"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
@@ -183,16 +183,16 @@ export function AICenter() {
                 <Send size={18} />
               </Button>
             </div>
-            <p className="text-center text-[10px] text-slate-400 mt-3 font-bold uppercase tracking-[0.1em]">
+            <p className="text-center text-[10px] text-muted-foreground mt-3 font-bold uppercase tracking-[0.1em]">
               Propulsé par Gemini 3.1 Flash • HypeRemote Intelligence
             </p>
           </div>
         </div>
 
         {/* Sidebar Insights */}
-        <div className="hidden lg:flex w-80 flex-col p-6 space-y-6 overflow-y-auto">
+        <div className="hidden lg:flex w-80 flex-col p-6 space-y-6 overflow-y-auto bg-background">
           <div>
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Insights Prédictifs</h3>
+            <h3 className="text-xs font-black text-muted-foreground uppercase tracking-[0.2em] mb-4">Insights Prédictifs</h3>
             <div className="space-y-4">
               {aiInsights.map((insight, i) => (
                 <motion.div
@@ -201,15 +201,15 @@ export function AICenter() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.1 * i }}
                 >
-                  <Card className="border-none shadow-sm hover:shadow-md transition-all rounded-2xl overflow-hidden group">
+                  <Card className="border-none shadow-sm hover:shadow-md transition-all rounded-2xl overflow-hidden group bg-card">
                     <CardHeader className="p-4 pb-2 flex flex-row items-center gap-3 space-y-0">
                       <div className={`p-2 rounded-xl ${insight.bg} ${insight.color} group-hover:scale-110 transition-transform`}>
                         <insight.icon size={16} />
                       </div>
-                      <CardTitle className="text-sm font-bold text-brand-navy">{insight.title}</CardTitle>
+                      <CardTitle className="text-sm font-bold text-foreground">{insight.title}</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0">
-                      <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                      <p className="text-xs text-muted-foreground font-medium leading-relaxed">
                         {insight.description}
                       </p>
                     </CardContent>
@@ -219,13 +219,13 @@ export function AICenter() {
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-200">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Capacités IA</h3>
+          <div className="pt-4 border-t border-border">
+            <h3 className="text-xs font-black text-muted-foreground uppercase tracking-[0.2em] mb-4">Capacités IA</h3>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary" className="bg-white border-slate-100 text-[10px] font-bold py-1 px-3 rounded-lg text-slate-500">Analyse de Logs</Badge>
-              <Badge variant="secondary" className="bg-white border-slate-100 text-[10px] font-bold py-1 px-3 rounded-lg text-slate-500">Audit Sécurité</Badge>
-              <Badge variant="secondary" className="bg-white border-slate-100 text-[10px] font-bold py-1 px-3 rounded-lg text-slate-500">Scripts Auto</Badge>
-              <Badge variant="secondary" className="bg-white border-slate-100 text-[10px] font-bold py-1 px-3 rounded-lg text-slate-500">Support N1</Badge>
+              <Badge variant="secondary" className="bg-card border-border text-[10px] font-bold py-1 px-3 rounded-lg text-muted-foreground">Analyse de Logs</Badge>
+              <Badge variant="secondary" className="bg-card border-border text-[10px] font-bold py-1 px-3 rounded-lg text-muted-foreground">Audit Sécurité</Badge>
+              <Badge variant="secondary" className="bg-card border-border text-[10px] font-bold py-1 px-3 rounded-lg text-muted-foreground">Scripts Auto</Badge>
+              <Badge variant="secondary" className="bg-card border-border text-[10px] font-bold py-1 px-3 rounded-lg text-muted-foreground">Support N1</Badge>
             </div>
           </div>
 

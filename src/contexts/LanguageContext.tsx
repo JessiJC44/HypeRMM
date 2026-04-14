@@ -14,7 +14,7 @@ const translations: Record<Language, Record<string, string>> = {
   fr: {
     'nav.dashboard': 'Tableau de bord',
     'nav.tickets': 'Tickets',
-    'nav.assets': 'Actifs',
+    'nav.assets': 'Appareils',
     'nav.alerts': 'Alertes',
     'nav.sites': 'Sites',
     'nav.app-center': 'App Center',
@@ -52,7 +52,7 @@ const translations: Record<Language, Record<string, string>> = {
   en: {
     'nav.dashboard': 'Dashboard',
     'nav.tickets': 'Tickets',
-    'nav.assets': 'Assets',
+    'nav.assets': 'Devices',
     'nav.alerts': 'Alerts',
     'nav.sites': 'Sites',
     'nav.app-center': 'App Center',

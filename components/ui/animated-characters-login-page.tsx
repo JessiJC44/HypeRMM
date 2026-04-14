@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Eye, EyeOff, Mail, Sparkles } from "lucide-react";
+import { Eye, EyeOff, Mail, Sparkles, Smartphone, Shield, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/src/components/Logo";
 import { toast } from "sonner";
@@ -202,6 +202,11 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
   const [isLookingAtEachOther, setIsLookingAtEachOther] = useState(false);
   const [isPurplePeeking, setIsPurplePeeking] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [authStep, setAuthStep] = useState<'login' | '2fa' | 'setup-2fa'>('login');
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaMethod, setMfaMethod] = useState<'email' | 'sms' | 'google' | 'microsoft'>('email');
+  const [generatedCode, setGeneratedCode] = useState("");
+  const [savedMfaMethod, setSavedMfaMethod] = useState<'email' | 'sms' | 'google' | 'microsoft' | null>(null);
   const purpleRef = useRef<HTMLDivElement>(null);
   const blackRef = useRef<HTMLDivElement>(null);
   const yellowRef = useRef<HTMLDivElement>(null);
@@ -323,16 +328,27 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
     try {
       if (isSignUp) {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        // Update profile with a default name if needed
         await updateProfile(userCredential.user, {
           displayName: email.split('@')[0]
         });
         toast.success("Account created successfully!");
-        if (onLogin) onLogin();
+        setAuthStep('setup-2fa');
       } else {
         await signInWithEmailAndPassword(auth, email, password);
-        toast.success("Welcome back!");
-        if (onLogin) onLogin();
+        // Check if user has a saved method (mocked)
+        if (savedMfaMethod) {
+          setMfaMethod(savedMfaMethod);
+          const code = Math.floor(100000 + Math.random() * 900000).toString();
+          setGeneratedCode(code);
+          toast.info(`Verification code sent via ${savedMfaMethod}: ${code}`, { duration: 10000 });
+          setAuthStep('2fa');
+        } else {
+          // Default to email if none saved
+          const code = Math.floor(100000 + Math.random() * 900000).toString();
+          setGeneratedCode(code);
+          toast.info(`Verification code sent to ${email}: ${code}`, { duration: 10000 });
+          setAuthStep('2fa');
+        }
       }
     } catch (err: any) {
       console.error("Auth error:", err);
@@ -359,13 +375,53 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
     setIsLoading(true);
     try {
       await signInWithPopup(auth, googleProvider);
-      toast.success("Logged in with Google!");
-      if (onLogin) onLogin();
+      if (savedMfaMethod) {
+        setMfaMethod(savedMfaMethod);
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        setGeneratedCode(code);
+        toast.info(`Verification code sent via ${savedMfaMethod}: ${code}`, { duration: 10000 });
+        setAuthStep('2fa');
+      } else {
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        setGeneratedCode(code);
+        toast.info(`Verification code sent to your email: ${code}`, { duration: 10000 });
+        setAuthStep('2fa');
+      }
     } catch (err: any) {
       console.error("Google Auth error:", err);
-      toast.error("Failed to login with Google.");
+      if (err.code === 'auth/popup-closed-by-user') {
+        // User closed the popup, no need for a scary error toast
+        toast.info("Connexion annulée.");
+      } else if (err.code === 'auth/popup-blocked') {
+        toast.error("Le popup de connexion a été bloqué par votre navigateur.");
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        // Another popup was opened
+      } else {
+        toast.error("Échec de la connexion avec Google.");
+      }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleVerifyMfa = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (mfaCode === generatedCode || (mfaCode === "123456" && mfaMethod === 'app')) {
+      toast.success("Verification successful!");
+      if (onLogin) onLogin();
+    } else {
+      toast.error("Invalid verification code.");
+    }
+  };
+
+  const handleSetupMfa = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (mfaCode === "123456" || mfaMethod === 'email' || mfaMethod === 'sms') {
+      setSavedMfaMethod(mfaMethod);
+      toast.success(`2FA configured with ${mfaMethod === 'google' ? 'Google' : mfaMethod === 'microsoft' ? 'Microsoft' : mfaMethod.toUpperCase()}!`);
+      if (onLogin) onLogin();
+    } else {
+      toast.error("Invalid verification code.");
     }
   };
 
@@ -577,115 +633,337 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
           {/* Header */}
           <div className="text-center mb-10">
             <h1 className="text-3xl font-bold tracking-tight mb-2">
-              {isSignUp ? "Create an account" : "Welcome back!"}
+              {authStep === 'setup-2fa' ? "Secure your account" : authStep === '2fa' ? "Two-Factor Authentication" : (isSignUp ? "Create an account" : "Welcome back!")}
             </h1>
             <p className="text-muted-foreground text-sm">
-              {isSignUp ? "Enter your details to get started" : "Please enter your details"}
+              {authStep === 'setup-2fa'
+                ? "Choose your preferred two-factor authentication method"
+                : authStep === '2fa' 
+                ? `Enter the 6-digit code sent to your ${mfaMethod === 'email' ? 'email' : mfaMethod === 'sms' ? 'phone' : 'authenticator app'}` 
+                : (isSignUp ? "Enter your details to get started" : "Please enter your details")}
             </p>
+            {auth.currentUser && (
+              <button 
+                onClick={() => auth.signOut()}
+                className="mt-4 text-xs text-brand-blue hover:underline font-bold uppercase tracking-widest"
+              >
+                Not you? Sign out
+              </button>
+            )}
           </div>
 
-          {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder=""
-                value={email}
-                autoComplete="off"
-                onChange={(e) => setEmail(e.target.value)}
-                onFocus={() => setIsTyping(true)}
-                onBlur={() => setIsTyping(false)}
-                required
-                className="h-12 bg-background border-border/60 focus:border-primary"
-              />
-            </div>
+          {authStep === 'login' ? (
+            <>
+              {/* Login Form */}
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder=""
+                    value={email}
+                    autoComplete="off"
+                    onChange={(e) => setEmail(e.target.value)}
+                    onFocus={() => setIsTyping(true)}
+                    onBlur={() => setIsTyping(false)}
+                    required
+                    className="h-12 bg-background border-border/60 focus:border-primary"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder=""
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="h-12 pr-10 bg-background border-border/60 focus:border-primary"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder=""
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className="h-12 pr-10 bg-background border-border/60 focus:border-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="size-5" />
+                      ) : (
+                        <Eye className="size-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox id="remember" />
+                    <Label
+                      htmlFor="remember"
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      Remember for 30 days
+                    </Label>
+                  </div>
+                  <a
+                    href="#"
+                    className="text-sm text-primary hover:underline font-medium"
+                  >
+                    Forgot password?
+                  </a>
+                </div>
+
+                {error && (
+                  <div className="p-3 text-sm text-red-400 bg-red-950/20 border border-red-900/30 rounded-lg">
+                    {error}
+                  </div>
+                )}
+
+                <Button 
+                  type="submit" 
+                  className="w-full h-12 text-base font-medium" 
+                  size="lg" 
+                  disabled={isLoading}
                 >
-                  {showPassword ? (
-                    <EyeOff className="size-5" />
-                  ) : (
-                    <Eye className="size-5" />
-                  )}
+                  {isLoading ? (isSignUp ? "Creating account..." : "Signing in...") : (isSignUp ? "Sign Up" : "Log in")}
+                </Button>
+              </form>
+
+              {/* Social Login */}
+              <div className="mt-6">
+                <Button 
+                  variant="outline" 
+                  className="w-full h-12 bg-background border-border/60 hover:bg-accent"
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={isLoading}
+                >
+                  <Mail className="mr-2 size-5" />
+                  {isSignUp ? "Sign up with Google" : "Log in with Google"}
+                </Button>
+              </div>
+
+              {/* Sign Up Link */}
+              <div className="text-center text-sm text-muted-foreground mt-8">
+                {isSignUp ? "Already have an account? " : "Don't have an account? "}
+                <button 
+                  onClick={() => setIsSignUp(!isSignUp)}
+                  className="text-foreground font-medium hover:underline"
+                >
+                  {isSignUp ? "Log in" : "Sign Up"}
                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Checkbox id="remember" />
-                <Label
-                  htmlFor="remember"
-                  className="text-sm font-normal cursor-pointer"
+            </>
+          ) : authStep === 'setup-2fa' ? (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="grid grid-cols-1 gap-3">
+                <button 
+                  onClick={() => setMfaMethod('email')}
+                  className={cn(
+                    "flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left",
+                    mfaMethod === 'email' ? "border-primary bg-primary/5" : "border-border/60 hover:border-border"
+                  )}
                 >
-                  Remember for 30 days
-                </Label>
+                  <div className={cn("p-2 rounded-lg", mfaMethod === 'email' ? "bg-primary text-white" : "bg-muted text-muted-foreground")}>
+                    <Mail size={20} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">Email Verification</p>
+                    <p className="text-xs text-muted-foreground">Receive a code on your email address</p>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={() => setMfaMethod('sms')}
+                  className={cn(
+                    "flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left",
+                    mfaMethod === 'sms' ? "border-primary bg-primary/5" : "border-border/60 hover:border-border"
+                  )}
+                >
+                  <div className={cn("p-2 rounded-lg", mfaMethod === 'sms' ? "bg-primary text-white" : "bg-muted text-muted-foreground")}>
+                    <Smartphone size={20} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">SMS Verification</p>
+                    <p className="text-xs text-muted-foreground">Receive a code on your mobile phone</p>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={() => setMfaMethod('google')}
+                  className={cn(
+                    "flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left",
+                    mfaMethod === 'google' ? "border-primary bg-primary/5" : "border-border/60 hover:border-border"
+                  )}
+                >
+                  <div className={cn("p-2 rounded-lg", mfaMethod === 'google' ? "bg-primary text-white" : "bg-muted text-muted-foreground")}>
+                    <Shield size={20} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">Google Authenticator</p>
+                    <p className="text-xs text-muted-foreground">Use Google Auth App for secure OTP</p>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={() => setMfaMethod('microsoft')}
+                  className={cn(
+                    "flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left",
+                    mfaMethod === 'microsoft' ? "border-primary bg-primary/5" : "border-border/60 hover:border-border"
+                  )}
+                >
+                  <div className={cn("p-2 rounded-lg", mfaMethod === 'microsoft' ? "bg-primary text-white" : "bg-muted text-muted-foreground")}>
+                    <Lock size={20} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">Microsoft Authenticator</p>
+                    <p className="text-xs text-muted-foreground">Use Microsoft Auth App for secure OTP</p>
+                  </div>
+                </button>
               </div>
-              <a
-                href="#"
-                className="text-sm text-primary hover:underline font-medium"
-              >
-                Forgot password?
-              </a>
+
+              {(mfaMethod === 'google' || mfaMethod === 'microsoft') && (
+                <div className="p-6 bg-muted/30 rounded-2xl border border-border/60 flex flex-col items-center space-y-4 animate-in zoom-in-95 duration-300">
+                  <div className="bg-white p-3 rounded-lg shadow-sm">
+                    <div className="w-32 h-32 bg-slate-900 flex items-center justify-center text-white text-[10px] text-center p-2">
+                      [QR CODE MOCK]
+                      <br />
+                      Scan with {mfaMethod === 'google' ? 'Google' : 'Microsoft'} Auth App
+                    </div>
+                  </div>
+                  <div className="w-full space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Enter code from app</Label>
+                    <Input 
+                      placeholder="000 000" 
+                      className="h-12 text-center text-xl font-mono tracking-[0.5em]"
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {mfaMethod === 'sms' && (
+                <div className="p-6 bg-muted/30 rounded-2xl border border-border/60 space-y-4 animate-in zoom-in-95 duration-300">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Phone Number</Label>
+                    <Input 
+                      placeholder="+33 6 00 00 00 00" 
+                      className="h-12"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Verification Code</Label>
+                    <Input 
+                      placeholder="000 000" 
+                      className="h-12 text-center text-xl font-mono tracking-[0.5em]"
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <Button onClick={handleSetupMfa} className="w-full h-12 text-base font-medium">
+                {(mfaMethod === 'google' || mfaMethod === 'microsoft' || mfaMethod === 'sms') ? "Verify and Save" : "Save and Continue"}
+              </Button>
             </div>
+          ) : (
+            <div className="space-y-6">
+              <form onSubmit={handleVerifyMfa} className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex justify-center gap-2">
+                    {[0, 1, 2, 3, 4, 5].map((i) => (
+                      <Input
+                        key={i}
+                        type="text"
+                        maxLength={1}
+                        className="w-12 h-14 text-center text-2xl font-bold bg-background border-border/60 focus:border-primary"
+                        value={mfaCode[i] || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (/^\d?$/.test(val)) {
+                            const newCode = mfaCode.split("");
+                            newCode[i] = val;
+                            setMfaCode(newCode.join(""));
+                            // Auto-focus next
+                            if (val && i < 5) {
+                              const next = e.target.nextElementSibling as HTMLInputElement;
+                              if (next) next.focus();
+                            }
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Backspace" && !mfaCode[i] && i > 0) {
+                            const prev = (e.target as HTMLInputElement).previousElementSibling as HTMLInputElement;
+                            if (prev) prev.focus();
+                          }
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
 
-            {error && (
-              <div className="p-3 text-sm text-red-400 bg-red-950/20 border border-red-900/30 rounded-lg">
-                {error}
+                <div className="flex flex-col gap-3">
+                  <Button type="submit" className="w-full h-12 text-base font-medium">
+                    Verify Code
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    className="w-full"
+                    onClick={() => {
+                      const code = Math.floor(100000 + Math.random() * 900000).toString();
+                      setGeneratedCode(code);
+                      toast.info(`New code sent: ${code}`);
+                    }}
+                  >
+                    Resend Code
+                  </Button>
+                </div>
+              </form>
+
+              <div className="pt-4 border-t border-border/40">
+                <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">Try another method</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className={cn("text-[10px] font-bold h-9", mfaMethod === 'email' && "border-primary text-primary bg-primary/5")}
+                    onClick={() => setMfaMethod('email')}
+                  >
+                    Email
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className={cn("text-[10px] font-bold h-9", mfaMethod === 'sms' && "border-primary text-primary bg-primary/5")}
+                    onClick={() => setMfaMethod('sms')}
+                  >
+                    SMS
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className={cn("text-[10px] font-bold h-9", mfaMethod === 'app' && "border-primary text-primary bg-primary/5")}
+                    onClick={() => setMfaMethod('app')}
+                  >
+                    App
+                  </Button>
+                </div>
               </div>
-            )}
 
-            <Button 
-              type="submit" 
-              className="w-full h-12 text-base font-medium" 
-              size="lg" 
-              disabled={isLoading}
-            >
-              {isLoading ? (isSignUp ? "Creating account..." : "Signing in...") : (isSignUp ? "Sign Up" : "Log in")}
-            </Button>
-          </form>
-
-          {/* Social Login */}
-          <div className="mt-6">
-            <Button 
-              variant="outline" 
-              className="w-full h-12 bg-background border-border/60 hover:bg-accent"
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={isLoading}
-            >
-              <Mail className="mr-2 size-5" />
-              {isSignUp ? "Sign up with Google" : "Log in with Google"}
-            </Button>
-          </div>
-
-          {/* Sign Up Link */}
-          <div className="text-center text-sm text-muted-foreground mt-8">
-            {isSignUp ? "Already have an account? " : "Don't have an account? "}
-            <button 
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-foreground font-medium hover:underline"
-            >
-              {isSignUp ? "Log in" : "Sign Up"}
-            </button>
-          </div>
+              <button 
+                onClick={() => setAuthStep('login')}
+                className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors mt-4"
+              >
+                Back to login
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
