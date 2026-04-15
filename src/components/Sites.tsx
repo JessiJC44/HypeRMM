@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Globe, Plus, Search, Filter, MoreVertical, MapPin, Users, Monitor, Shield, Building2, Building, Landmark, Server } from 'lucide-react';
+import { Globe, Plus, Search, Filter, MoreVertical, MapPin, Users, Monitor, Shield, Building2, Building, Landmark, Server, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import { auth } from '../lib/firebase';
 export function Sites() {
   const [sites, setSites] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   React.useEffect(() => {
     const user = auth.currentUser;
@@ -40,6 +41,7 @@ export function Sites() {
     const user = auth.currentUser;
     if (!user) return;
 
+    setIsSubmitting(true);
     try {
       await firestoreService.addSite(user.uid, {
         name: 'New Site ' + (sites.length + 1),
@@ -53,6 +55,8 @@ export function Sites() {
       toast.success("Site added successfully");
     } catch (error) {
       toast.error("Failed to add site");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -69,10 +73,11 @@ export function Sites() {
         </div>
         <Button 
           onClick={handleAddSite}
+          disabled={isSubmitting}
           className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 gap-2 w-full sm:w-auto"
         >
-          <Plus size={18} />
-          Add New Site
+          {isSubmitting ? <RefreshCw size={18} className="animate-spin" /> : <Plus size={18} />}
+          {isSubmitting ? 'Adding...' : 'Add New Site'}
         </Button>
       </motion.div>
 

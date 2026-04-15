@@ -10,7 +10,7 @@ import { Eye, EyeOff, Mail, Sparkles, Smartphone, Shield, Lock } from "lucide-re
 import { cn } from "@/lib/utils";
 import { Logo } from "@/src/components/Logo";
 import { toast } from "sonner";
-import { auth, googleProvider } from "@/src/lib/firebase";
+import { auth, googleProvider, microsoftProvider } from "@/src/lib/firebase";
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -404,6 +404,36 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
     }
   };
 
+  const handleMicrosoftLogin = async () => {
+    setIsLoading(true);
+    try {
+      await signInWithPopup(auth, microsoftProvider);
+      if (savedMfaMethod) {
+        setMfaMethod(savedMfaMethod);
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        setGeneratedCode(code);
+        toast.info(`Verification code sent via ${savedMfaMethod}: ${code}`, { duration: 10000 });
+        setAuthStep('2fa');
+      } else {
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        setGeneratedCode(code);
+        toast.info(`Verification code sent to your email: ${code}`, { duration: 10000 });
+        setAuthStep('2fa');
+      }
+    } catch (err: any) {
+      console.error("Microsoft Auth error:", err);
+      if (err.code === 'auth/popup-closed-by-user') {
+        toast.info("Connexion annulée.");
+      } else if (err.code === 'auth/popup-blocked') {
+        toast.error("Le popup de connexion a été bloqué par votre navigateur.");
+      } else {
+        toast.error("Échec de la connexion avec Microsoft.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleVerifyMfa = (e: React.FormEvent) => {
     e.preventDefault();
     if (mfaCode === generatedCode || (mfaCode === "123456" && mfaMethod === 'app')) {
@@ -733,16 +763,26 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
               </form>
 
               {/* Social Login */}
-              <div className="mt-6">
+              <div className="mt-6 grid grid-cols-2 gap-3">
                 <Button 
                   variant="outline" 
-                  className="w-full h-12 bg-background border-border/60 hover:bg-accent"
+                  className="h-12 bg-background border-border/60 hover:bg-accent"
                   type="button"
                   onClick={handleGoogleLogin}
                   disabled={isLoading}
                 >
-                  <Mail className="mr-2 size-5" />
-                  {isSignUp ? "Sign up with Google" : "Log in with Google"}
+                  <Mail className="mr-2 size-5 text-red-500" />
+                  Google
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="h-12 bg-background border-border/60 hover:bg-accent"
+                  type="button"
+                  onClick={handleMicrosoftLogin}
+                  disabled={isLoading}
+                >
+                  <Shield className="mr-2 size-5 text-blue-500" />
+                  Microsoft
                 </Button>
               </div>
 

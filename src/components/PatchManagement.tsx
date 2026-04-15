@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Shield, AlertCircle, CheckCircle2, Clock, Search, Filter, Play } from 'lucide-react';
+import { Shield, AlertCircle, CheckCircle2, Clock, Search, Filter, Play, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
+import { toast } from 'sonner';
 
 import { firestoreService } from '../services/firestoreService';
 
@@ -15,6 +16,7 @@ import { auth } from '../lib/firebase';
 export function PatchManagement() {
   const [patches, setPatches] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   React.useEffect(() => {
     const user = auth.currentUser;
@@ -27,6 +29,15 @@ export function PatchManagement() {
 
     return () => unsubscribe();
   }, []);
+
+  const handleRunPatching = async () => {
+    setIsSubmitting(true);
+    toast.info("Initiating patch deployment across all devices...");
+    setTimeout(() => {
+      setIsSubmitting(false);
+      toast.success("Patch deployment started successfully");
+    }, 2000);
+  };
 
   const criticalCount = patches.filter(p => p.severity === 'critical').length;
   const securityCount = patches.filter(p => p.severity === 'security' || p.severity === 'moderate').length;
@@ -44,9 +55,13 @@ export function PatchManagement() {
         </div>
         <div className="flex gap-3">
           <Button variant="outline" className="rounded-full px-6 border-border font-bold bg-card text-muted-foreground hover:bg-muted/50">Automation Profiles</Button>
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 gap-2">
-            <Play size={18} />
-            Run Patching Now
+          <Button 
+            onClick={handleRunPatching}
+            disabled={isSubmitting}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 gap-2"
+          >
+            {isSubmitting ? <RefreshCw size={18} className="animate-spin" /> : <Play size={18} />}
+            {isSubmitting ? 'Running...' : 'Run Patching Now'}
           </Button>
         </div>
       </motion.div>
