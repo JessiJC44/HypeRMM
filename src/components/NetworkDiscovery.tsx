@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { firestoreService } from '../services/firestoreService';
 import { toast } from 'sonner';
 
+import { auth } from '../lib/firebase';
+
 export function NetworkDiscovery() {
   const [isScanning, setIsScanning] = React.useState(false);
 
@@ -26,9 +28,12 @@ export function NetworkDiscovery() {
 
   const installAgent = async (name: string, ip: string) => {
     try {
-      await firestoreService.addDevice({
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not authenticated');
+
+      await firestoreService.addDevice(user.uid, {
         name,
-        ip,
+        ipAddress: ip,
         type: 'workstation',
         os: 'Windows 11 Pro',
         customer: 'Discovered',

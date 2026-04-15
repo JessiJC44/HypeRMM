@@ -41,9 +41,12 @@ import { toast } from 'sonner';
 
 import { firestoreService } from '../services/firestoreService';
 
+import { auth } from '../lib/firebase';
+
 export function Ticketing() {
   const [tickets, setTickets] = React.useState<Ticket[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
   const [newTicket, setNewTicket] = React.useState({
     title: '',
@@ -53,7 +56,10 @@ export function Ticketing() {
   });
 
   React.useEffect(() => {
-    const unsubscribe = firestoreService.subscribeToTickets((data) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const unsubscribe = firestoreService.subscribeToTickets(user.uid, (data) => {
       setTickets(data);
       setLoading(false);
     });
@@ -63,8 +69,12 @@ export function Ticketing() {
 
   const handleAddTicket = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
-      await firestoreService.addTicket({
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not authenticated');
+
+      await firestoreService.addTicket(user.uid, {
         ...newTicket,
         status: 'open'
       });
@@ -78,6 +88,8 @@ export function Ticketing() {
       });
     } catch (error) {
       toast.error("Failed to create ticket");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -187,7 +199,9 @@ export function Ticketing() {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90">Create Ticket</Button>
+                <Button type="submit" disabled={isSubmitting} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                  {isSubmitting ? 'Creating...' : 'Create Ticket'}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>

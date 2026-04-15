@@ -74,9 +74,12 @@ import { AgentConsole } from './AgentConsole';
 
 import { firestoreService } from '../services/firestoreService';
 
+import { auth } from '../lib/firebase';
+
 export function Devices() {
   const [devices, setDevices] = React.useState<Device[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
   const [selectedDevice, setSelectedDevice] = React.useState<Device | null>(null);
   const [installStep, setInstallStep] = React.useState(1);
@@ -87,7 +90,7 @@ export function Devices() {
     os: 'Windows',
     arch: 'x64',
     customer: '',
-    ip: '192.168.1.' + Math.floor(Math.random() * 254),
+    ipAddress: '192.168.1.' + Math.floor(Math.random() * 254),
     anydeskId: '',
     splashtopId: ''
   });
@@ -107,7 +110,10 @@ export function Devices() {
   };
 
   React.useEffect(() => {
-    const unsubscribe = firestoreService.subscribeToDevices((data) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const unsubscribe = firestoreService.subscribeToDevices(user.uid, (data) => {
       setDevices(data);
       setLoading(false);
     });
@@ -117,8 +123,12 @@ export function Devices() {
 
   const handleAddAgent = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    setIsSubmitting(true);
     try {
-      await firestoreService.addDevice({
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not authenticated');
+
+      await firestoreService.addDevice(user.uid, {
         ...newDevice,
         type: newDevice.type as any,
         status: 'online',
@@ -127,6 +137,8 @@ export function Devices() {
       setInstallStep(5);
     } catch (error) {
       toast.error("Failed to register agent");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -644,9 +656,17 @@ export function Devices() {
                       </div>
                       <Button 
                         onClick={handleAddAgent}
+                        disabled={isSubmitting}
                         className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-black uppercase text-[10px] tracking-widest h-10 px-6"
                       >
-                        Télécharger
+                        {isSubmitting ? (
+                          <span className="flex items-center gap-2">
+                            <span className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full" />
+                            Processing...
+                          </span>
+                        ) : (
+                          'Télécharger'
+                        )}
                       </Button>
                     </div>
                   )}

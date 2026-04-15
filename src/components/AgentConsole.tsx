@@ -102,7 +102,7 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
                   ONLINE
                 </Badge>
               </div>
-              <p className="text-xs text-slate-500 font-medium">{device.customer || 'Pescespada Island'} • {device.ip}</p>
+              <p className="text-xs text-slate-500 font-medium">{device.customer || 'Pescespada Island'} • {device.ipAddress}</p>
             </div>
           </div>
         </div>
@@ -412,7 +412,7 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
                             {[
                               { label: 'OS Version', value: device.os + ' Pro 22H2' },
                               { label: 'Host Name', value: device.name },
-                              { label: 'IP Address', value: device.ip },
+                              { label: 'IP Address', value: device.ipAddress },
                               { label: 'MAC Address', value: '00:1A:2B:3C:4D:5E' },
                               { label: 'Last Seen', value: new Date(device.lastSeen).toLocaleString() },
                               { label: 'Agent Version', value: '1.4.2.0' },

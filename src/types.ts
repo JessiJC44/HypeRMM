@@ -4,26 +4,31 @@ export type TicketPriority = 'low' | 'medium' | 'high' | 'critical';
 export interface Ticket {
   id: string;
   title: string;
+  description?: string;
   customer: string;
   status: TicketStatus;
   priority: TicketPriority;
   assignedTo: string;
+  userId: string;
   createdAt: string;
 }
 
 export type DeviceStatus = 'online' | 'offline' | 'warning';
+export type DeviceType = 'workstation' | 'server' | 'laptop' | 'mobile';
 
 export interface Device {
   id: string;
   name: string;
-  type: 'workstation' | 'server' | 'laptop' | 'mobile';
+  userId: string;
+  type: DeviceType;
   os: string;
+  ipAddress: string;
   status: DeviceStatus;
   lastSeen: string;
-  ip: string;
   customer?: string;
   anydeskId?: string;
   splashtopId?: string;
+  createdAt?: string;
 }
 
 export interface Alert {
@@ -32,7 +37,16 @@ export interface Alert {
   deviceName: string;
   message: string;
   severity: 'info' | 'warning' | 'critical';
+  userId: string;
   timestamp: string;
+}
+
+export interface Site {
+  id: string;
+  name: string;
+  address?: string;
+  userId: string;
+  createdAt?: string;
 }
 
 export interface ChatMessage {

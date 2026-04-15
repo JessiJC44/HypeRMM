@@ -51,6 +51,8 @@ const chartData = [
 
 import { firestoreService } from '../services/firestoreService';
 
+import { auth } from '../lib/firebase';
+
 export function Dashboard() {
   const [stats, setStats] = React.useState<any>(null);
   const [alerts, setAlerts] = React.useState<Alert[]>([]);
@@ -58,12 +60,15 @@ export function Dashboard() {
   const { t } = useLanguage();
 
   React.useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
     const fetchStats = async () => {
-      const data = await firestoreService.getDashboardStats();
+      const data = await firestoreService.getDashboardStats(user.uid);
       if (data) setStats(data);
     };
 
-    const unsubscribeAlerts = firestoreService.subscribeToAlerts((data) => {
+    const unsubscribeAlerts = firestoreService.subscribeToAlerts(user.uid, (data) => {
       setAlerts(data);
       setLoading(false);
     });

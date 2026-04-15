@@ -47,15 +47,17 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, onClose, user }: Side
   const { t } = useLanguage();
 
   React.useEffect(() => {
-    const unsubscribe = firestoreService.subscribeToAlerts((alerts) => {
-      const activeAlerts = alerts.filter(a => a.status === 'active').length;
+    if (!user) return;
+    const unsubscribe = firestoreService.subscribeToAlerts(user.uid, (alerts) => {
+      const activeAlerts = alerts.filter(a => a.severity === 'critical' || a.severity === 'warning').length;
       setAlertCount(activeAlerts);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   const menuItems = [
     { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard, description: 'Aperçu de la santé du système et des indicateurs clés.' },
+    { id: 'rmm', label: 'RMM', icon: Activity, description: 'Gestion à distance avancée propulsée par Supabase.' },
     { id: 'tickets', label: t('nav.tickets'), icon: Ticket, description: 'Gérer et suivre les demandes de support informatique.' },
     { id: 'sites', label: t('nav.sites'), icon: Globe, description: 'Gérer les organisations clients et les emplacements.' },
     { id: 'assets', label: t('nav.assets'), icon: Monitor, description: 'Inventaire et gestion à distance de tous les terminaux.' },

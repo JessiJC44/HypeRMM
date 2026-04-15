@@ -9,12 +9,17 @@ import { motion } from 'motion/react';
 import { firestoreService } from '../services/firestoreService';
 import { toast } from 'sonner';
 
+import { auth } from '../lib/firebase';
+
 export function Sites() {
   const [sites, setSites] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const unsubscribe = firestoreService.subscribeToSites((data) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const unsubscribe = firestoreService.subscribeToSites(user.uid, (data) => {
       setSites(data);
       setLoading(false);
     });
@@ -31,6 +36,26 @@ export function Sites() {
     }
   };
 
+  const handleAddSite = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      await firestoreService.addSite(user.uid, {
+        name: 'New Site ' + (sites.length + 1),
+        customer: 'New Customer',
+        location: 'Remote',
+        devices: 0,
+        users: 0,
+        status: 'Healthy',
+        type: 'office'
+      });
+      toast.success("Site added successfully");
+    } catch (error) {
+      toast.error("Failed to add site");
+    }
+  };
+
   return (
     <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
       <motion.div 
@@ -43,18 +68,7 @@ export function Sites() {
           <p className="text-sm text-muted-foreground">Manage your customer organizations and their physical locations.</p>
         </div>
         <Button 
-          onClick={() => {
-            firestoreService.addSite({
-              name: 'New Site ' + (sites.length + 1),
-              customer: 'New Customer',
-              location: 'Remote',
-              devices: 0,
-              users: 0,
-              status: 'Healthy',
-              type: 'office'
-            });
-            toast.success("Site added successfully");
-          }}
+          onClick={handleAddSite}
           className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 gap-2 w-full sm:w-auto"
         >
           <Plus size={18} />

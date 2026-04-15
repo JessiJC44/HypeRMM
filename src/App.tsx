@@ -37,12 +37,17 @@ import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { EmailVerificationScreen } from './components/EmailVerificationScreen';
+import { RMMDashboard } from './components/RMMDashboard';
+
 export default function App() {
   const [activeTab, setActiveTab] = React.useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [user, setUser] = React.useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = React.useState(true);
   const [isDarkMode, setIsDarkMode] = React.useState(false);
+  const [needsEmailVerification, setNeedsEmailVerification] = React.useState(false);
   const { language, setLanguage, t } = useLanguage();
 
   React.useEffect(() => {
@@ -56,23 +61,34 @@ export default function App() {
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Ensure user exists in Firestore
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
+        // Reload to get latest emailVerified status
+        await firebaseUser.reload();
         
-        if (!userDoc.exists()) {
-          await setDoc(userDocRef, {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName,
-            photoURL: firebaseUser.photoURL,
-            role: 'user',
-            createdAt: serverTimestamp()
-          });
+        if (!firebaseUser.emailVerified) {
+          setUser(firebaseUser);
+          setNeedsEmailVerification(true);
+        } else {
+          setUser(firebaseUser);
+          setNeedsEmailVerification(false);
+          
+          // Ensure user exists in Firestore
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          
+          if (!userDoc.exists()) {
+            await setDoc(userDocRef, {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName,
+              photoURL: firebaseUser.photoURL,
+              role: 'user',
+              createdAt: serverTimestamp()
+            });
+          }
         }
-        setUser(firebaseUser);
       } else {
         setUser(null);
+        setNeedsEmailVerification(false);
       }
       setIsAuthLoading(false);
     });
@@ -97,10 +113,16 @@ export default function App() {
     );
   }
 
+  if (needsEmailVerification && user) {
+    return <EmailVerificationScreen user={user} onVerified={() => setNeedsEmailVerification(false)} />;
+  }
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard />;
+      case 'rmm':
+        return <RMMDashboard />;
       case 'tickets':
         return <Ticketing />;
       case 'assets':
@@ -145,7 +167,8 @@ export default function App() {
   };
 
   return (
-    <TooltipProvider>
+    <ErrorBoundary>
+      <TooltipProvider>
       <div className="flex h-screen bg-background text-foreground font-sans antialiased overflow-hidden">
         <Sidebar 
           activeTab={activeTab} 
@@ -291,5 +314,6 @@ export default function App() {
         <Toaster position="bottom-right" />
       </div>
     </TooltipProvider>
+  </ErrorBoundary>
   );
 }

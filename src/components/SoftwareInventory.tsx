@@ -9,12 +9,17 @@ import { cn } from '@/lib/utils';
 
 import { firestoreService } from '../services/firestoreService';
 
+import { auth } from '../lib/firebase';
+
 export function SoftwareInventory() {
   const [software, setSoftware] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const unsubscribe = firestoreService.subscribeToSoftware((data) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const unsubscribe = firestoreService.subscribeToSoftware(user.uid, (data) => {
       setSoftware(data);
       setLoading(false);
     });

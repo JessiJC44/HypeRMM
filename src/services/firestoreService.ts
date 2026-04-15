@@ -17,8 +17,12 @@ import { Ticket, Device, Alert } from '../types';
 
 export const firestoreService = {
   // Tickets
-  subscribeToTickets: (callback: (tickets: Ticket[]) => void) => {
-    const q = query(collection(db, 'tickets'), orderBy('createdAt', 'desc'));
+  subscribeToTickets: (userId: string, callback: (tickets: Ticket[]) => void) => {
+    const q = query(
+      collection(db, 'tickets'), 
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
     return onSnapshot(q, (snapshot) => {
       const tickets = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -28,10 +32,11 @@ export const firestoreService = {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'tickets'));
   },
 
-  addTicket: async (ticket: Omit<Ticket, 'id' | 'createdAt'>) => {
+  addTicket: async (userId: string, ticket: Omit<Ticket, 'id' | 'createdAt' | 'userId'>) => {
     try {
       await addDoc(collection(db, 'tickets'), {
         ...ticket,
+        userId,
         createdAt: serverTimestamp()
       });
     } catch (error) {
@@ -40,8 +45,12 @@ export const firestoreService = {
   },
 
   // Devices
-  subscribeToDevices: (callback: (devices: Device[]) => void) => {
-    const q = query(collection(db, 'devices'), orderBy('name', 'asc'));
+  subscribeToDevices: (userId: string, callback: (devices: Device[]) => void) => {
+    const q = query(
+      collection(db, 'devices'), 
+      where('userId', '==', userId),
+      orderBy('name', 'asc')
+    );
     return onSnapshot(q, (snapshot) => {
       const devices = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -51,10 +60,11 @@ export const firestoreService = {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'devices'));
   },
 
-  addDevice: async (device: Omit<Device, 'id' | 'lastSeen'>) => {
+  addDevice: async (userId: string, device: Omit<Device, 'id' | 'lastSeen' | 'userId'>) => {
     try {
       await addDoc(collection(db, 'devices'), {
         ...device,
+        userId,
         lastSeen: serverTimestamp()
       });
     } catch (error) {
@@ -63,8 +73,13 @@ export const firestoreService = {
   },
 
   // Alerts
-  subscribeToAlerts: (callback: (alerts: Alert[]) => void) => {
-    const q = query(collection(db, 'alerts'), orderBy('timestamp', 'desc'), limit(50));
+  subscribeToAlerts: (userId: string, callback: (alerts: Alert[]) => void) => {
+    const q = query(
+      collection(db, 'alerts'), 
+      where('userId', '==', userId),
+      orderBy('timestamp', 'desc'), 
+      limit(50)
+    );
     return onSnapshot(q, (snapshot) => {
       const alerts = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -74,10 +89,11 @@ export const firestoreService = {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'alerts'));
   },
 
-  addAlert: async (alert: Omit<Alert, 'id' | 'timestamp'>) => {
+  addAlert: async (userId: string, alert: Omit<Alert, 'id' | 'timestamp' | 'userId'>) => {
     try {
       await addDoc(collection(db, 'alerts'), {
         ...alert,
+        userId,
         timestamp: serverTimestamp()
       });
     } catch (error) {
@@ -86,8 +102,12 @@ export const firestoreService = {
   },
 
   // Sites
-  subscribeToSites: (callback: (sites: any[]) => void) => {
-    const q = query(collection(db, 'sites'), orderBy('name', 'asc'));
+  subscribeToSites: (userId: string, callback: (sites: any[]) => void) => {
+    const q = query(
+      collection(db, 'sites'), 
+      where('userId', '==', userId),
+      orderBy('name', 'asc')
+    );
     return onSnapshot(q, (snapshot) => {
       const sites = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -97,10 +117,11 @@ export const firestoreService = {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'sites'));
   },
 
-  addSite: async (site: any) => {
+  addSite: async (userId: string, site: any) => {
     try {
       await addDoc(collection(db, 'sites'), {
         ...site,
+        userId,
         createdAt: serverTimestamp()
       });
     } catch (error) {
@@ -109,8 +130,12 @@ export const firestoreService = {
   },
 
   // Software
-  subscribeToSoftware: (callback: (software: any[]) => void) => {
-    const q = query(collection(db, 'software'), orderBy('name', 'asc'));
+  subscribeToSoftware: (userId: string, callback: (software: any[]) => void) => {
+    const q = query(
+      collection(db, 'software'), 
+      where('userId', '==', userId),
+      orderBy('name', 'asc')
+    );
     return onSnapshot(q, (snapshot) => {
       const software = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -121,8 +146,12 @@ export const firestoreService = {
   },
 
   // Patches
-  subscribeToPatches: (callback: (patches: any[]) => void) => {
-    const q = query(collection(db, 'patches'), orderBy('title', 'asc'));
+  subscribeToPatches: (userId: string, callback: (patches: any[]) => void) => {
+    const q = query(
+      collection(db, 'patches'), 
+      where('userId', '==', userId),
+      orderBy('title', 'asc')
+    );
     return onSnapshot(q, (snapshot) => {
       const patches = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -145,12 +174,22 @@ export const firestoreService = {
   },
 
   // Stats for Dashboard
-  getDashboardStats: async () => {
+  getDashboardStats: async (userId: string) => {
     try {
       const [ticketsSnap, devicesSnap, alertsSnap] = await Promise.all([
-        getDocs(query(collection(db, 'tickets'), where('status', '==', 'open'))),
-        getDocs(collection(db, 'devices')),
-        getDocs(collection(db, 'alerts'))
+        getDocs(query(
+          collection(db, 'tickets'), 
+          where('userId', '==', userId),
+          where('status', '==', 'open')
+        )),
+        getDocs(query(
+          collection(db, 'devices'),
+          where('userId', '==', userId)
+        )),
+        getDocs(query(
+          collection(db, 'alerts'),
+          where('userId', '==', userId)
+        ))
       ]);
 
       return {

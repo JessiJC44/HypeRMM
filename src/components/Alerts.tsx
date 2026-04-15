@@ -11,12 +11,17 @@ import { motion } from 'motion/react';
 import { firestoreService } from '../services/firestoreService';
 import { Alert } from '../types';
 
+import { auth } from '../lib/firebase';
+
 export function Alerts() {
   const [alerts, setAlerts] = React.useState<Alert[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const unsubscribe = firestoreService.subscribeToAlerts((data) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const unsubscribe = firestoreService.subscribeToAlerts(user.uid, (data) => {
       setAlerts(data);
       setLoading(false);
     });

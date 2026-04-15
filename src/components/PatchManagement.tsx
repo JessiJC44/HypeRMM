@@ -10,12 +10,17 @@ import { motion } from 'motion/react';
 
 import { firestoreService } from '../services/firestoreService';
 
+import { auth } from '../lib/firebase';
+
 export function PatchManagement() {
   const [patches, setPatches] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const unsubscribe = firestoreService.subscribeToPatches((data) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const unsubscribe = firestoreService.subscribeToPatches(user.uid, (data) => {
       setPatches(data);
       setLoading(false);
     });
