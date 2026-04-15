@@ -1,0 +1,72 @@
+name: Build HypeRemote Agent
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install dependencies
+        run: |
+          cd agent
+          go mod tidy
+
+      - name: Build for Windows
+        run: |
+          cd agent
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ../dist/hyperemote-agent-windows.exe .
+
+      - name: Build for Linux
+        run: |
+          cd agent
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ../dist/hyperemote-agent-linux .
+
+      - name: Build for macOS Intel
+        run: |
+          cd agent
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ../dist/hyperemote-agent-mac-intel .
+
+      - name: Build for macOS ARM (M series)
+        run: |
+          cd agent
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ../dist/hyperemote-agent-mac-arm .
+
+      - name: Create install scripts in dist
+        run: |
+          cp agent/installer/install-windows.ps1 dist/
+          cp agent/installer/install-linux.sh dist/
+          cp agent/installer/install-mac.sh dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperemote-agent
+          path: dist/
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/hyperemote-agent-windows.exe
+            dist/hyperemote-agent-linux
+            dist/hyperemote-agent-mac-intel
+            dist/hyperemote-agent-mac-arm
+            dist/install-windows.ps1
+            dist/install-linux.sh
+            dist/install-mac.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

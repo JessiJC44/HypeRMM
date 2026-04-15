@@ -76,6 +76,18 @@ import { firestoreService } from '../services/firestoreService';
 
 import { auth } from '../lib/firebase';
 
+const AppleIcon = ({ size = 16, className = "" }: { size?: number; className?: string }) => (
+  <svg 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="currentColor" 
+    className={className}
+  >
+    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.1 2.48-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.24-1.99 1.1-3.15-1.04.04-2.3.69-3.05 1.56-.67.77-1.26 1.97-1.1 3.1 1.16.09 2.32-.68 3.05-1.51z"/>
+  </svg>
+);
+
 export function Devices() {
   const [devices, setDevices] = React.useState<Device[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -90,17 +102,9 @@ export function Devices() {
     os: 'Windows',
     arch: 'x64',
     customer: '',
-    ipAddress: '192.168.1.' + Math.floor(Math.random() * 254),
-    anydeskId: '',
-    splashtopId: ''
+    ipAddress: '192.168.1.' + Math.floor(Math.random() * 254)
   });
-  const [remoteTool, setRemoteTool] = React.useState<'splashtop' | 'anydesk'>('splashtop');
   const [filterQuery, setFilterQuery] = React.useState('');
-
-  const REMOTE_LOGOS = {
-    splashtop: 'https://www.splashtop.com/wp-content/uploads/splashtop-logo-icon.png',
-    anydesk: 'https://anydesk.com/_static/img/logos/anydesk-logo-icon.png'
-  };
 
   const customers = ['Client A', 'Client B', 'Client C', 'Discovered'];
 
@@ -131,8 +135,7 @@ export function Devices() {
       await firestoreService.addDevice(user.uid, {
         ...newDevice,
         type: newDevice.type as any,
-        status: 'online',
-        splashtopId: 'ST-' + Math.random().toString(36).substring(2, 8).toUpperCase()
+        status: 'offline'
       });
       setInstallStep(5);
     } catch (error) {
@@ -160,13 +163,14 @@ export function Devices() {
     }
   };
 
-  const handleRemoteConnect = (deviceName: string) => {
-    const toolName = remoteTool === 'splashtop' ? 'Splashtop Enterprise' : 'AnyDesk';
-    toast.info(`Connecting to ${deviceName} via ${toolName}...`);
-    // Direct connection simulation
-    setTimeout(() => {
-      toast.success(`Session established with ${deviceName}`);
-    }, 1500);
+  const handleRemoteConnect = (device: Device) => {
+    const fluxId = device.flux_id || device.fluxId;
+    if (!fluxId) {
+      toast.error('Accès à distance non disponible. Flux n\'est pas installé sur cet appareil.');
+      return;
+    }
+    window.open(`rustdesk://connect/${fluxId}`, '_blank');
+    toast.info(`Ouverture de la connexion à distance vers ${device.name}...`);
   };
 
   if (selectedDevice) {
@@ -366,7 +370,14 @@ export function Devices() {
                     </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <span className="text-xs text-muted-foreground">{device.type === 'server' ? 'Serveur' : 'PC'}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-muted rounded-md">
+                        {device.os.toLowerCase().includes('windows') ? <Monitor size={14} className="text-blue-500" /> : 
+                         device.os.toLowerCase().includes('linux') ? <Server size={14} className="text-orange-500" /> : 
+                         <AppleIcon size={14} className="text-slate-700" />}
+                      </div>
+                      <span className="text-xs text-muted-foreground">{device.type === 'server' ? 'Serveur' : 'PC'}</span>
+                    </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <span className="text-xs text-primary hover:underline cursor-pointer">
@@ -395,52 +406,16 @@ export function Devices() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center">
-                      <DropdownMenu>
-                        <div className="flex items-center bg-background border border-border rounded-md overflow-hidden shadow-sm hover:border-primary/30 transition-all">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-8 px-2 rounded-none border-r border-border hover:bg-primary/5"
-                            onClick={() => handleRemoteConnect(device.name)}
-                          >
-                            <img 
-                              src={REMOTE_LOGOS[remoteTool]} 
-                              alt={remoteTool} 
-                              className="w-4 h-4 object-contain"
-                              referrerPolicy="no-referrer"
-                            />
-                          </Button>
-                          <DropdownMenuTrigger
-                            render={
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-8 w-6 px-0 rounded-none hover:bg-muted/50"
-                              >
-                                <ChevronDown size={12} className="text-muted-foreground" />
-                              </Button>
-                            }
-                          />
-                        </div>
-                        <DropdownMenuContent align="end" className="w-40 bg-card border-border">
-                          <DropdownMenuItem 
-                            className="flex items-center gap-2 cursor-pointer"
-                            onClick={() => setRemoteTool('splashtop')}
-                          >
-                            <img src={REMOTE_LOGOS.splashtop} className="w-4 h-4 object-contain" referrerPolicy="no-referrer" />
-                            <span className="text-xs font-medium">Splashtop</span>
-                            {remoteTool === 'splashtop' && <Check size={12} className="ml-auto text-brand-green" />}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            className="flex items-center gap-2 cursor-pointer"
-                            onClick={() => setRemoteTool('anydesk')}
-                          >
-                            <img src={REMOTE_LOGOS.anydesk} className="w-4 h-4 object-contain" referrerPolicy="no-referrer" />
-                            <span className="text-xs font-medium">AnyDesk</span>
-                            {remoteTool === 'anydesk' && <Check size={12} className="ml-auto text-brand-green" />}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <Button 
+                        variant="default" 
+                        size="sm" 
+                        className="h-8 px-3 gap-2 text-xs font-bold"
+                        onClick={() => handleRemoteConnect(device)}
+                        disabled={!device.flux_id && !device.fluxId}
+                      >
+                        <Monitor size={14} />
+                        Connect
+                      </Button>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -475,7 +450,7 @@ export function Devices() {
                   Installer un agent
                 </DialogTitle>
                 <DialogDescription className="text-white/60 font-medium text-sm mt-2">
-                  Déployez l'agent HypeRemote avec accès à distance Splashtop & AnyDesk pré-configuré.
+                  Déployez l'agent HypeRemote sur vos appareils.
                 </DialogDescription>
               </DialogHeader>
             </div>
@@ -502,14 +477,14 @@ export function Devices() {
               <motion.div 
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="space-y-6"
+                className="space-y-6 min-h-[280px]"
               >
                 <div className="space-y-4">
                   <h3 className="text-sm font-black text-brand-navy uppercase tracking-widest">Étape 1 : Système d'exploitation</h3>
                   <div className="grid grid-cols-3 gap-4">
                     {[
                       { id: 'Windows', icon: Monitor, label: 'Windows' },
-                      { id: 'macOS', icon: Laptop, label: 'macOS' },
+                      { id: 'macOS', icon: AppleIcon, label: 'macOS' },
                       { id: 'Linux', icon: Server, label: 'Linux' },
                     ].map((os) => (
                       <button
@@ -518,7 +493,7 @@ export function Devices() {
                           setNewDevice({ 
                             ...newDevice, 
                             os: os.id,
-                            arch: os.id === 'macOS' ? 'Apple Silicon' : 'x64'
+                            arch: os.id === 'macOS' ? 'M series (ARM)' : 'x64'
                           });
                         }}
                         className={cn(
@@ -533,33 +508,39 @@ export function Devices() {
                   </div>
                 </div>
 
-                {newDevice.os === 'macOS' && (
-                  <motion.div 
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="space-y-4"
-                  >
-                    <h3 className="text-sm font-black text-brand-navy uppercase tracking-widest">Architecture du processeur</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      {[
-                        { id: 'Apple Silicon', label: 'Apple Silicon', desc: 'M1, M2, M3, M4, M5' },
-                        { id: 'Intel', label: 'Intel', desc: 'Processeurs Core i5/i7/i9' },
-                      ].map((arch) => (
-                        <button
-                          key={arch.id}
-                          onClick={() => setNewDevice({ ...newDevice, arch: arch.id })}
-                          className={cn(
-                            "flex flex-col items-start gap-1 p-4 rounded-2xl border-2 transition-all duration-200 text-left",
-                            newDevice.arch === arch.id ? "border-brand-blue bg-brand-blue/5 text-brand-blue" : "border-slate-100 hover:border-slate-200 text-slate-400"
-                          )}
-                        >
-                          <span className="text-xs font-black">{arch.label}</span>
-                          <span className="text-[10px] font-medium opacity-70">{arch.desc}</span>
-                        </button>
-                      ))}
+                <div className="h-[120px]">
+                  {newDevice.os === 'macOS' ? (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="space-y-4"
+                    >
+                      <h3 className="text-sm font-black text-brand-navy uppercase tracking-widest">Architecture du processeur</h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        {[
+                          { id: 'M series (ARM)', label: 'M series (ARM)', desc: 'M1, M2, M3, M4, M5' },
+                          { id: 'Intel (x64)', label: 'Intel (x64)', desc: 'Processeurs Core i5/i7/i9' },
+                        ].map((arch) => (
+                          <button
+                            key={arch.id}
+                            onClick={() => setNewDevice({ ...newDevice, arch: arch.id })}
+                            className={cn(
+                              "flex flex-col items-start gap-1 p-4 rounded-2xl border-2 transition-all duration-200 text-left",
+                              newDevice.arch === arch.id ? "border-brand-blue bg-brand-blue/5 text-brand-blue" : "border-slate-100 hover:border-slate-200 text-slate-400"
+                            )}
+                          >
+                            <span className="text-xs font-black">{arch.label}</span>
+                            <span className="text-[10px] font-medium opacity-70">{arch.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-slate-300 border-2 border-dashed border-slate-50 rounded-2xl">
+                      <p className="text-[10px] font-bold uppercase tracking-widest">Architecture standard {newDevice.arch}</p>
                     </div>
-                  </motion.div>
-                )}
+                  )}
+                </div>
               </motion.div>
             )}
 
@@ -647,15 +628,22 @@ export function Devices() {
                         </div>
                         <div>
                           <p className="text-sm font-black text-foreground">
-                            {newDevice.os === 'Windows' ? 'HypeRemote_Agent_Win_x64.exe' : 
-                             newDevice.os === 'macOS' ? `HypeRemote_Agent_Mac_${newDevice.arch === 'Apple Silicon' ? 'ARM' : 'Intel'}.pkg` :
-                             'HypeRemote_Agent_Linux.deb'}
+                            {newDevice.os === 'Windows' ? 'hyperemote-agent-windows.exe' : 
+                             newDevice.os === 'macOS' ? `hyperemote-agent-mac-${newDevice.arch === 'M series (ARM)' ? 'arm' : 'intel'}` :
+                             'hyperemote-agent-linux'}
                           </p>
                           <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">v2.4.0 • 12.4 MB</p>
                         </div>
                       </div>
                       <Button 
-                        onClick={handleAddAgent}
+                        onClick={() => {
+                          const baseUrl = 'https://github.com/JessiJC44/HypeRMM/releases/latest/download';
+                          const url = newDevice.os === 'Windows' ? `${baseUrl}/hyperemote-agent-windows.exe` : 
+                                      newDevice.os === 'macOS' ? `${baseUrl}/hyperemote-agent-mac-${newDevice.arch === 'M series (ARM)' ? 'arm' : 'intel'}` :
+                                      `${baseUrl}/hyperemote-agent-linux`;
+                          window.open(url, '_blank');
+                          handleAddAgent(null as any);
+                        }}
                         disabled={isSubmitting}
                         className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-black uppercase text-[10px] tracking-widest h-10 px-6"
                       >
@@ -675,10 +663,18 @@ export function Devices() {
                     <div className="space-y-3">
                       <div className="relative group">
                         <pre className="bg-slate-950 text-primary p-4 rounded-xl font-mono text-[11px] whitespace-pre-wrap break-all border border-border">
-                          {newDevice.os === 'Windows' ? 
-                            `msiexec /i "HypeRemoteAgent.msi" /qn CUSTOMER_ID="${newDevice.customer || 'ID'}" NAME="${newDevice.name || 'PC'}"` :
-                            `curl -sSL https://get.hyperemote.com/install.sh | sudo bash -s -- --customer "${newDevice.customer || 'ID'}" --name "${newDevice.name || 'PC'}"`
-                          }
+                          {(() => {
+                            const userId = auth.currentUser?.uid || 'YOUR_USER_ID';
+                            const baseUrl = 'https://github.com/JessiJC44/HypeRMM/releases/latest/download';
+                            if (newDevice.os === 'Windows') {
+                              return `powershell -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri '${baseUrl}/hyperemote-agent-windows.exe' -OutFile agent.exe; .\\agent.exe '${userId}' '${newDevice.name || '$env:COMPUTERNAME'}'}"`;
+                            } else if (newDevice.os === 'Linux') {
+                              return `curl -sSL ${baseUrl}/hyperemote-agent-linux -o agent && chmod +x agent && ./agent "${userId}" "${newDevice.name || '$(hostname)'}"`;
+                            } else {
+                              const arch = newDevice.arch === 'M series (ARM)' ? 'arm' : 'intel';
+                              return `curl -sSL ${baseUrl}/hyperemote-agent-mac-${arch} -o agent && chmod +x agent && ./agent "${userId}" "${newDevice.name || '$(hostname)'}"`;
+                            }
+                          })()}
                         </pre>
                         <div className="absolute right-2 top-2 flex gap-2">
                           <Button 
@@ -686,9 +682,17 @@ export function Devices() {
                             size="icon" 
                             className="h-8 w-8 rounded-lg bg-white/10 text-white hover:bg-white/20"
                             onClick={() => {
-                              const cmd = newDevice.os === 'Windows' ? 
-                                `msiexec /i "HypeRemoteAgent.msi" /qn CUSTOMER_ID="${newDevice.customer || 'ID'}" NAME="${newDevice.name || 'PC'}"` :
-                                `curl -sSL https://get.hyperemote.com/install.sh | sudo bash -s -- --customer "${newDevice.customer || 'ID'}" --name "${newDevice.name || 'PC'}"`;
+                              const userId = auth.currentUser?.uid || 'YOUR_USER_ID';
+                              const baseUrl = 'https://github.com/JessiJC44/HypeRMM/releases/latest/download';
+                              let cmd = '';
+                              if (newDevice.os === 'Windows') {
+                                cmd = `powershell -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri '${baseUrl}/hyperemote-agent-windows.exe' -OutFile agent.exe; .\\agent.exe '${userId}' '${newDevice.name || '$env:COMPUTERNAME'}'}"`;
+                              } else if (newDevice.os === 'Linux') {
+                                cmd = `curl -sSL ${baseUrl}/hyperemote-agent-linux -o agent && chmod +x agent && ./agent "${userId}" "${newDevice.name || '$(hostname)'}"`;
+                              } else {
+                                const arch = newDevice.arch === 'M series (ARM)' ? 'arm' : 'intel';
+                                cmd = `curl -sSL ${baseUrl}/hyperemote-agent-mac-${arch} -o agent && chmod +x agent && ./agent "${userId}" "${newDevice.name || '$(hostname)'}"`;
+                              }
                               navigator.clipboard.writeText(cmd);
                               toast.success("Commande copiée !");
                               handleAddAgent(null as any);
@@ -701,9 +705,17 @@ export function Devices() {
                       <div className="flex justify-end">
                         <Button 
                           onClick={() => {
-                            const cmd = newDevice.os === 'Windows' ? 
-                              `msiexec /i "HypeRemoteAgent.msi" /qn CUSTOMER_ID="${newDevice.customer || 'ID'}" NAME="${newDevice.name || 'PC'}"` :
-                              `curl -sSL https://get.hyperemote.com/install.sh | sudo bash -s -- --customer "${newDevice.customer || 'ID'}" --name "${newDevice.name || 'PC'}"`;
+                            const userId = auth.currentUser?.uid || 'YOUR_USER_ID';
+                            const baseUrl = 'https://github.com/JessiJC44/HypeRMM/releases/latest/download';
+                            let cmd = '';
+                            if (newDevice.os === 'Windows') {
+                              cmd = `powershell -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri '${baseUrl}/hyperemote-agent-windows.exe' -OutFile agent.exe; .\\agent.exe '${userId}' '${newDevice.name || '$env:COMPUTERNAME'}'}"`;
+                            } else if (newDevice.os === 'Linux') {
+                              cmd = `curl -sSL ${baseUrl}/hyperemote-agent-linux -o agent && chmod +x agent && ./agent "${userId}" "${newDevice.name || '$(hostname)'}"`;
+                            } else {
+                              const arch = newDevice.arch === 'M series (ARM)' ? 'arm' : 'intel';
+                              cmd = `curl -sSL ${baseUrl}/hyperemote-agent-mac-${arch} -o agent && chmod +x agent && ./agent "${userId}" "${newDevice.name || '$(hostname)'}"`;
+                            }
                             navigator.clipboard.writeText(cmd);
                             toast.success("Commande copiée !");
                             handleAddAgent(null as any);
@@ -719,10 +731,11 @@ export function Devices() {
                   {installMode === 'link' && (
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex-1 bg-card border border-border rounded-xl px-4 py-2 text-xs font-mono text-muted-foreground break-all">
-                        https://get.hyperemote.com/dl/{newDevice.customer?.toLowerCase().replace(/\s+/g, '-') || 'client'}
+                        https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-windows.exe
                       </div>
                       <Button 
                         onClick={() => {
+                          navigator.clipboard.writeText('https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-windows.exe');
                           toast.success("Lien copié !");
                           handleAddAgent(null as any);
                         }}
@@ -737,9 +750,8 @@ export function Devices() {
                 <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10 flex items-start gap-3">
                   <Shield size={16} className="text-primary shrink-0 mt-0.5" />
                   <div className="space-y-1">
-                    <p className="text-[11px] font-black text-primary uppercase tracking-wider">Installation Automatique</p>
                     <p className="text-[10px] text-muted-foreground font-medium leading-relaxed">
-                      L'agent installera automatiquement <strong>Splashtop Enterprise</strong> et <strong>AnyDesk Enterprise</strong>. 
+                      L'agent installera automatiquement <strong>Flux (Remote Desktop)</strong>. 
                       L'utilisateur devra accorder les permissions une seule fois lors de l'installation pour permettre un accès sans surveillance.
                     </p>
                   </div>

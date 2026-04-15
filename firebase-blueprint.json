@@ -27,8 +27,7 @@
         "ip": { "type": "string" },
         "customer": { "type": "string" },
         "lastSeen": { "type": "string", "format": "date-time" },
-        "anydeskId": { "type": "string" },
-        "splashtopId": { "type": "string" }
+        "fluxId": { "type": "string" }
       },
       "required": ["name", "type", "status"]
     },

@@ -18,7 +18,7 @@ export function KnowledgeBase() {
 
   const recentArticles = [
     { title: 'How to install the HypeRemote agent on macOS', category: 'Agent Installation', date: '2 days ago' },
-    { title: 'Configuring Splashtop for remote access', category: 'Remote Access', date: '5 days ago' },
+    { title: 'Configuring Flux for remote access', category: 'Remote Access', date: '5 days ago' },
     { title: 'Best practices for patch automation', category: 'Patch Management', date: '1 week ago' },
     { title: 'Troubleshooting network discovery issues', category: 'Network Discovery', date: '2 weeks ago' },
   ];

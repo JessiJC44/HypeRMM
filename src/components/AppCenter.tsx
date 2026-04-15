@@ -9,20 +9,12 @@ import { motion } from 'motion/react';
 export function AppCenter() {
   const apps = [
     { 
-      name: 'Splashtop', 
+      name: 'Flux', 
       category: 'Remote Access', 
       status: 'Installed', 
-      version: '3.5.2.1', 
-      developer: 'Splashtop Inc.',
-      logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/5/5e/Splashtop_Logo.svg/200px-Splashtop_Logo.svg.png'
-    },
-    { 
-      name: 'AnyDesk', 
-      category: 'Remote Access', 
-      status: 'Available', 
-      version: '7.1.0', 
-      developer: 'AnyDesk Software',
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/AnyDesk_Logo.svg/200px-AnyDesk_Logo.svg.png'
+      version: '1.2.3', 
+      developer: 'HypeRemote',
+      logo: 'https://raw.githubusercontent.com/JessiJC44/HypeRMM/main/logos/flux-logo.png'
     },
     { 
       name: 'Chocolatey', 
@@ -30,7 +22,7 @@ export function AppCenter() {
       status: 'Installed', 
       version: '1.2.1', 
       developer: 'Chocolatey Software',
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Chocolatey_logo.svg/200px-Chocolatey_logo.svg.png'
+      logo: 'https://raw.githubusercontent.com/JessiJC44/HypeRMM/main/logos/chocolatey.png'
     },
     { 
       name: 'Webroot', 
@@ -38,7 +30,7 @@ export function AppCenter() {
       status: 'Available', 
       version: '9.0.33.35', 
       developer: 'OpenText',
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Webroot_logo.svg/200px-Webroot_logo.svg.png'
+      logo: 'https://raw.githubusercontent.com/JessiJC44/HypeRMM/main/logos/webroot.png'
     },
     { 
       name: 'Bitdefender', 
@@ -46,7 +38,7 @@ export function AppCenter() {
       status: 'Installed', 
       version: '7.7.1.245', 
       developer: 'Bitdefender',
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Bitdefender_logo.svg/200px-Bitdefender_logo.svg.png'
+      logo: 'https://raw.githubusercontent.com/JessiJC44/HypeRMM/main/logos/bitdefender.png'
     },
     { 
       name: 'Acronis', 
@@ -54,7 +46,7 @@ export function AppCenter() {
       status: 'Available', 
       version: '15.0.29486', 
       developer: 'Acronis',
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Acronis_logo.svg/200px-Acronis_logo.svg.png'
+      logo: 'https://raw.githubusercontent.com/JessiJC44/HypeRMM/main/logos/acronis.png'
     },
   ];
 

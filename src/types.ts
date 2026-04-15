@@ -26,8 +26,8 @@ export interface Device {
   status: DeviceStatus;
   lastSeen: string;
   customer?: string;
-  anydeskId?: string;
-  splashtopId?: string;
+  fluxId?: string;
+  flux_id?: string;
   createdAt?: string;
 }
 

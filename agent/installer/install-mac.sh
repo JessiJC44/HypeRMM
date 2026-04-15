@@ -45,9 +45,9 @@ fi
 # Detect architecture
 ARCH=$(uname -m)
 if [ "$ARCH" = "arm64" ]; then
-    AGENT_URL="https://github.com/YOUR_REPO/releases/latest/download/hyperemote-agent-darwin-arm64"
+    AGENT_URL="https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-mac-arm"
 else
-    AGENT_URL="https://github.com/YOUR_REPO/releases/latest/download/hyperemote-agent-darwin-amd64"
+    AGENT_URL="https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-mac-intel"
 fi
 
 # Variables

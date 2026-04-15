@@ -46,7 +46,7 @@ fi
 # Variables
 INSTALL_DIR="/opt/hyperemote"
 CONFIG_DIR="/etc/hyperemote"
-AGENT_URL="https://github.com/YOUR_REPO/releases/latest/download/hyperemote-agent-linux-amd64"
+AGENT_URL="https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-linux"
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then

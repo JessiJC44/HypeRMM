@@ -24,7 +24,8 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
-  Plus
+  Plus,
+  Server
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -44,6 +45,20 @@ import { cn } from '@/lib/utils';
 import { Device } from '@/src/types';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+
+import { auth } from '../lib/firebase';
+
+const AppleIcon = ({ size = 16, className = "" }: { size?: number; className?: string }) => (
+  <svg 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="currentColor" 
+    className={className}
+  >
+    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.1 2.48-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.24-1.99 1.1-3.15-1.04.04-2.3.69-3.05 1.56-.67.77-1.26 1.97-1.1 3.1 1.16.09 2.32-.68 3.05-1.51z"/>
+  </svg>
+);
 
 interface AgentConsoleProps {
   device: Device;
@@ -66,11 +81,16 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
   const [isConnecting, setIsConnecting] = React.useState(false);
 
   const handleConnect = () => {
+    const fluxId = device.flux_id || device.fluxId;
+    if (!fluxId) {
+      toast.error('Remote access not available. Flux is not installed on this device.');
+      return;
+    }
     setIsConnecting(true);
-    toast.info(`Initiating Splashtop Enterprise session with ${device.name}...`);
+    window.open(`rustdesk://connect/${fluxId}`, '_blank');
+    toast.info(`Opening remote connection to ${device.name}...`);
     setTimeout(() => {
       setIsConnecting(false);
-      toast.success(`Remote session established with ${device.name}`);
     }, 2000);
   };
 
@@ -93,16 +113,21 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
           </Button>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-              <Monitor size={20} />
+              {device.os.toLowerCase().includes('windows') ? <Monitor size={20} /> : 
+               device.os.toLowerCase().includes('linux') ? <Server size={20} /> : 
+               <AppleIcon size={20} />}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-slate-800">{device.name}</h2>
-                <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 text-[10px] font-bold border-emerald-100">
-                  ONLINE
+                <Badge variant={device.status === 'online' ? 'default' : 'secondary'} className={cn(
+                  "text-[10px] uppercase tracking-wider font-bold h-5",
+                  device.status === 'online' ? "bg-green-500 hover:bg-green-600" : "bg-slate-400"
+                )}>
+                  {device.status}
                 </Badge>
               </div>
-              <p className="text-xs text-slate-500 font-medium">{device.customer || 'Pescespada Island'} • {device.ipAddress}</p>
+              <p className="text-xs text-slate-500 font-medium">{device.os} • {device.ipAddress}</p>
             </div>
           </div>
         </div>

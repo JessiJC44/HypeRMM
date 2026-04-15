@@ -18,7 +18,7 @@ Write-Host ""
 
 # Variables
 $InstallDir = "$env:ProgramFiles\HypeRemote"
-$AgentUrl = "https://github.com/YOUR_REPO/releases/latest/download/hyperemote-agent-windows-amd64.exe"
+$AgentUrl = "https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-windows.exe"
 $ServiceName = "HypeRemoteAgent"
 
 # Create install directory
