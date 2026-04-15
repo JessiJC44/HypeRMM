@@ -151,6 +151,16 @@ export function RMMDashboard() {
     }
   };
 
+  const handleFluxConnect = (fluxId: string) => {
+    if (!fluxId) {
+      toast.error('Flux not installed on this device');
+      return;
+    }
+    // Open Flux/RustDesk with the device ID
+    window.open(`rustdesk://connect/${fluxId}`, '_blank');
+    toast.info('Opening Flux connection...');
+  };
+
   if (loading) {
     return (
       <div className="p-8 flex flex-col items-center justify-center h-[calc(100vh-64px)] space-y-4">
@@ -281,6 +291,20 @@ export function RMMDashboard() {
                     <Badge variant={device.status === 'online' ? 'default' : 'secondary'}>
                       {device.status}
                     </Badge>
+                    {device.flux_id && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="gap-1 h-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFluxConnect(device.flux_id);
+                        }}
+                      >
+                        <Monitor size={14} />
+                        Connect
+                      </Button>
+                    )}
                     <Button 
                       variant="ghost" 
                       size="icon" 

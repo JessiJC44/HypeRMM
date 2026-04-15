@@ -22,7 +22,8 @@ import {
   Sparkles,
   LogOut,
   Menu,
-  HelpCircle
+  HelpCircle,
+  Download
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from './Logo';
@@ -58,6 +59,7 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, onClose, user }: Side
   const menuItems = [
     { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard, description: 'Aperçu de la santé du système et des indicateurs clés.' },
     { id: 'rmm', label: 'RMM', icon: Activity, description: 'Gestion à distance avancée propulsée par Supabase.' },
+    { id: 'agent-download', label: 'Install Agent', icon: Download, description: 'Déployer l\'agent HypeRemote sur vos appareils.' },
     { id: 'tickets', label: t('nav.tickets'), icon: Ticket, description: 'Gérer et suivre les demandes de support informatique.' },
     { id: 'sites', label: t('nav.sites'), icon: Globe, description: 'Gérer les organisations clients et les emplacements.' },
     { id: 'assets', label: t('nav.assets'), icon: Monitor, description: 'Inventaire et gestion à distance de tous les terminaux.' },

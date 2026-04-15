@@ -5,6 +5,15 @@ export interface SupabaseDevice {
   os: string;
   ip_address: string;
   status: 'online' | 'offline';
+  flux_id?: string;
+  hostname?: string;
+  cpu?: string;
+  ram_total?: number;
+  ram_used?: number;
+  disk_total?: number;
+  disk_used?: number;
+  agent_version?: string;
+  public_ip?: string;
   last_seen: string;
   created_at: string;
 }

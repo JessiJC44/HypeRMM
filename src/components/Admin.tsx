@@ -1,13 +1,18 @@
 import * as React from 'react';
-import { Settings, User, Shield, Bell, Globe, CreditCard, Key, Database, Mail, Smartphone, Lock, Plus, Download, RefreshCw, Trash2, Copy } from 'lucide-react';
+import { Settings, User, Shield, Bell, Globe, CreditCard, Key, Database, Mail, Smartphone, Lock, Plus, Download, RefreshCw, Trash2, Copy, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import * as OTPAuth from "otpauth";
+import QRCode from "react-qr-code";
+import { auth, db } from '@/src/lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 import { firestoreService } from '../services/firestoreService';
 
@@ -15,8 +20,33 @@ export function Admin() {
   const [activeTab, setActiveTab] = React.useState('general');
   const [users, setUsers] = React.useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = React.useState(true);
+  
+  // MFA State
+  const [mfaStatus, setMfaStatus] = React.useState<any>({
+    email: 'Active',
+    google: 'Not Linked'
+  });
+  const [showSetup, setShowSetup] = React.useState<string | null>(null);
+  const [mfaSecret, setMfaSecret] = React.useState('');
+  const [mfaQrUrl, setMfaQrUrl] = React.useState('');
+  const [verificationCode, setVerificationCode] = React.useState('');
+  const [isVerifying, setIsVerifying] = React.useState(false);
 
   React.useEffect(() => {
+    const fetchMfaStatus = async () => {
+      if (auth.currentUser) {
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setMfaStatus({
+            email: 'Active',
+            google: data.mfaMethod === 'google' ? 'Active' : 'Not Linked'
+          });
+        }
+      }
+    };
+    fetchMfaStatus();
+
     if (activeTab === 'users') {
       const unsubscribe = firestoreService.subscribeToUsers((data) => {
         setUsers(data);
@@ -25,6 +55,82 @@ export function Admin() {
       return () => unsubscribe();
     }
   }, [activeTab]);
+
+  const handleStartSetup = (method: string) => {
+    if (method === 'google') {
+      const secret = new OTPAuth.Secret();
+      const totp = new OTPAuth.TOTP({
+        issuer: "HypeRemote",
+        label: auth.currentUser?.email || "user",
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: secret,
+      });
+      
+      setMfaSecret(secret.base32);
+      setMfaQrUrl(totp.toString());
+      setShowSetup(method);
+    } else {
+      toast.info(`Setup for ${method} is coming soon!`);
+    }
+  };
+
+  const handleVerifyAndLink = async () => {
+    if (!auth.currentUser || !showSetup) return;
+    
+    setIsVerifying(true);
+    try {
+      if (showSetup === 'google') {
+        const totp = new OTPAuth.TOTP({
+          issuer: "HypeRemote",
+          label: auth.currentUser?.email || "user",
+          algorithm: "SHA1",
+          digits: 6,
+          period: 30,
+          secret: mfaSecret,
+        });
+        
+        const delta = totp.validate({ token: verificationCode, window: 1 });
+        
+        if (delta !== null) {
+          await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+            mfaMethod: showSetup,
+            mfaSecret: mfaSecret
+          });
+          
+          setMfaStatus(prev => ({ ...prev, [showSetup]: 'Active' }));
+          toast.success(`Google Authenticator linked successfully!`);
+          setShowSetup(null);
+          setVerificationCode('');
+        } else {
+          toast.error("Invalid verification code. Please try again.");
+        }
+      }
+    } catch (error) {
+      console.error("MFA Link error:", error);
+      toast.error("Failed to link method.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleDisableMethod = async (method: string) => {
+    if (!auth.currentUser) return;
+    
+    try {
+      const updates: any = {
+        mfaMethod: null,
+        mfaSecret: null
+      };
+      
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), updates);
+      setMfaStatus(prev => ({ ...prev, [method]: 'Not Linked' }));
+      toast.success(`${method} disabled successfully.`);
+    } catch (error) {
+      toast.error("Failed to disable method.");
+    }
+  };
 
   const tabs = [
     { id: 'general', label: 'General Settings', icon: Settings },
@@ -154,10 +260,8 @@ export function Admin() {
                 <CardContent className="p-8 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
-                      { id: 'email', label: 'Email Verification', icon: Mail, status: 'Active', desc: 'Code sent to your primary email' },
-                      { id: 'sms', label: 'SMS Verification', icon: Smartphone, status: 'Not Linked', desc: 'Code sent to your mobile phone' },
-                      { id: 'google', label: 'Google Authenticator', icon: Shield, status: 'Not Linked', desc: 'Time-based OTP from Google App' },
-                      { id: 'microsoft', label: 'Microsoft Authenticator', icon: Shield, status: 'Not Linked', desc: 'Push notification or code' },
+                      { id: 'email', label: 'Email Verification', icon: Mail, status: mfaStatus.email, desc: 'Code sent to your primary email' },
+                      { id: 'google', label: 'Google Authenticator', icon: Shield, status: mfaStatus.google, desc: 'Time-based OTP from Google App' },
                     ].map((method) => (
                       <div key={method.id} className="p-5 rounded-2xl border border-border bg-card hover:border-brand-blue/30 transition-all group">
                         <div className="flex items-start justify-between mb-4">
@@ -182,7 +286,8 @@ export function Admin() {
                             "w-full h-9 rounded-xl font-black uppercase text-[9px] tracking-widest",
                             method.status === 'Active' ? "text-rose-500 hover:bg-rose-500/10" : "border-primary text-primary hover:bg-primary/5"
                           )}
-                          onClick={() => toast.info(`Linking ${method.label}...`)}
+                          onClick={() => method.status === 'Active' ? handleDisableMethod(method.id) : handleStartSetup(method.id)}
+                          disabled={method.id === 'email'} // Email is always active in this demo
                         >
                           {method.status === 'Active' ? 'Disable' : 'Link Method'}
                         </Button>
@@ -355,6 +460,54 @@ export function Admin() {
           )}
         </motion.div>
       </div>
+      <AnimatePresence>
+        {showSetup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="w-full max-w-md bg-card border border-border shadow-2xl rounded-3xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-border flex items-center justify-between bg-muted/30">
+                <h3 className="text-lg font-black text-foreground uppercase tracking-widest">
+                  Link Google Authenticator
+                </h3>
+                <button onClick={() => setShowSetup(null)} className="p-2 hover:bg-muted rounded-xl transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-8 flex flex-col items-center space-y-6 text-center">
+                <div className="bg-white p-4 rounded-2xl shadow-inner border border-border/40">
+                  <QRCode value={mfaQrUrl} size={180} />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-bold text-foreground">Scan this QR code</p>
+                  <p className="text-xs text-muted-foreground">Open your Authenticator app and scan the code above to link your account.</p>
+                </div>
+                
+                <div className="w-full space-y-3 pt-4 border-t border-border/40">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest text-left block">Enter 6-digit code</Label>
+                  <Input 
+                    placeholder="000 000" 
+                    className="h-14 text-center text-2xl font-black tracking-[0.5em] rounded-xl border-border bg-muted/20"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value)}
+                    maxLength={6}
+                  />
+                  <Button 
+                    onClick={handleVerifyAndLink} 
+                    className="w-full h-12 rounded-xl font-black uppercase text-xs tracking-widest"
+                    disabled={verificationCode.length !== 6 || isVerifying}
+                  >
+                    {isVerifying ? "Verifying..." : "Verify and Link"}
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

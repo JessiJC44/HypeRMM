@@ -6,17 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Eye, EyeOff, Mail, Sparkles, Smartphone, Shield, Lock } from "lucide-react";
+import { Eye, EyeOff, Mail, Sparkles, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/src/components/Logo";
 import { toast } from "sonner";
-import { auth, googleProvider, microsoftProvider } from "@/src/lib/firebase";
+import { auth, googleProvider, db, authHelpers } from "@/src/lib/firebase";
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signInWithPopup,
   updateProfile
 } from "firebase/auth";
+import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import * as OTPAuth from "otpauth";
+import QRCode from "react-qr-code";
 
 
 interface PupilProps {
@@ -204,9 +207,12 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
   const [isSignUp, setIsSignUp] = useState(false);
   const [authStep, setAuthStep] = useState<'login' | '2fa' | 'setup-2fa'>('login');
   const [mfaCode, setMfaCode] = useState("");
-  const [mfaMethod, setMfaMethod] = useState<'email' | 'sms' | 'google' | 'microsoft'>('email');
+  const [mfaMethod, setMfaMethod] = useState<'email' | 'google'>('email');
   const [generatedCode, setGeneratedCode] = useState("");
-  const [savedMfaMethod, setSavedMfaMethod] = useState<'email' | 'sms' | 'google' | 'microsoft' | null>(null);
+  const [savedMfaMethod, setSavedMfaMethod] = useState<'email' | 'google' | null>(null);
+  const [mfaSecret, setMfaSecret] = useState("");
+  const [mfaQrUrl, setMfaQrUrl] = useState("");
+
   const purpleRef = useRef<HTMLDivElement>(null);
   const blackRef = useRef<HTMLDivElement>(null);
   const yellowRef = useRef<HTMLDivElement>(null);
@@ -320,6 +326,60 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
   const yellowPos = calculatePosition(yellowRef);
   const orangePos = calculatePosition(orangeRef);
 
+  // Handle MFA setup generation
+  useEffect(() => {
+    if (authStep === 'setup-2fa' && mfaMethod === 'google') {
+      const secret = new OTPAuth.Secret();
+      const totp = new OTPAuth.TOTP({
+        issuer: "HypeRemote",
+        label: auth.currentUser?.email || "user",
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: secret,
+      });
+      
+      setMfaSecret(secret.base32);
+      setMfaQrUrl(totp.toString());
+    }
+  }, [authStep, mfaMethod]);
+
+  // Check for saved MFA on login and handle auto-jump
+  useEffect(() => {
+    const checkSavedMfa = async () => {
+      if (auth.currentUser) {
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        const data = userDoc.exists() ? userDoc.data() : {};
+        
+        if (data.mfaSecret) {
+          setMfaSecret(data.mfaSecret);
+        }
+
+        // Auto-jump to 2FA step if we're at the login step but already authenticated with Firebase
+        if (authStep === 'login') {
+          const provider = auth.currentUser.providerData[0]?.providerId;
+          
+          if (provider === 'google.com') {
+            setMfaMethod('google');
+            if (data.mfaMethod === 'google' && data.mfaSecret) {
+              setAuthStep('2fa');
+            } else {
+              setAuthStep('setup-2fa');
+            }
+          } else {
+            // Default to email for password login or others
+            setMfaMethod('email');
+            const code = Math.floor(100000 + Math.random() * 900000).toString();
+            setGeneratedCode(code);
+            toast.info(`Verification code sent to ${auth.currentUser.email}: ${code}`, { duration: 10000 });
+            setAuthStep('2fa');
+          }
+        }
+      }
+    };
+    checkSavedMfa();
+  }, [auth.currentUser, authStep]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -335,20 +395,12 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
         setAuthStep('setup-2fa');
       } else {
         await signInWithEmailAndPassword(auth, email, password);
-        // Check if user has a saved method (mocked)
-        if (savedMfaMethod) {
-          setMfaMethod(savedMfaMethod);
-          const code = Math.floor(100000 + Math.random() * 900000).toString();
-          setGeneratedCode(code);
-          toast.info(`Verification code sent via ${savedMfaMethod}: ${code}`, { duration: 10000 });
-          setAuthStep('2fa');
-        } else {
-          // Default to email if none saved
-          const code = Math.floor(100000 + Math.random() * 900000).toString();
-          setGeneratedCode(code);
-          toast.info(`Verification code sent to ${email}: ${code}`, { duration: 10000 });
-          setAuthStep('2fa');
-        }
+        // Force Email MFA for Email/Password login
+        setMfaMethod('email');
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        setGeneratedCode(code);
+        toast.info(`Verification code sent to ${email}: ${code}`, { duration: 10000 });
+        setAuthStep('2fa');
       }
     } catch (err: any) {
       console.error("Auth error:", err);
@@ -374,60 +426,48 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
-      if (savedMfaMethod) {
-        setMfaMethod(savedMfaMethod);
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        setGeneratedCode(code);
-        toast.info(`Verification code sent via ${savedMfaMethod}: ${code}`, { duration: 10000 });
-        setAuthStep('2fa');
+      console.log("Starting Google Login...");
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      // Check if user doc exists
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+        // New user from social login
+        await setDoc(userDocRef, {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          role: 'user',
+          createdAt: serverTimestamp()
+        });
+        setMfaMethod('google');
+        setAuthStep('setup-2fa');
       } else {
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        setGeneratedCode(code);
-        toast.info(`Verification code sent to your email: ${code}`, { duration: 10000 });
-        setAuthStep('2fa');
+        const data = userDoc.data();
+        setMfaMethod('google'); // Force Google Auth App for Google login
+        
+        if (data.mfaMethod === 'google' && data.mfaSecret) {
+          setMfaSecret(data.mfaSecret);
+          setAuthStep('2fa');
+        } else {
+          // If they haven't set up Google Auth yet, force them to
+          setAuthStep('setup-2fa');
+        }
       }
     } catch (err: any) {
       console.error("Google Auth error:", err);
       if (err.code === 'auth/popup-closed-by-user') {
-        // User closed the popup, no need for a scary error toast
         toast.info("Connexion annulée.");
       } else if (err.code === 'auth/popup-blocked') {
-        toast.error("Le popup de connexion a été bloqué par votre navigateur.");
-      } else if (err.code === 'auth/cancelled-popup-request') {
-        // Another popup was opened
+        toast.error("Le popup de connexion a été bloqué par votre navigateur. Veuillez autoriser les popups pour ce site.");
+      } else if (err.code === 'auth/network-request-failed') {
+        toast.error("Échec de la connexion: Erreur de réseau. Veuillez vérifier votre connexion internet ou désactiver vos bloqueurs de publicité (AdBlock).");
       } else {
-        toast.error("Échec de la connexion avec Google.");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleMicrosoftLogin = async () => {
-    setIsLoading(true);
-    try {
-      await signInWithPopup(auth, microsoftProvider);
-      if (savedMfaMethod) {
-        setMfaMethod(savedMfaMethod);
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        setGeneratedCode(code);
-        toast.info(`Verification code sent via ${savedMfaMethod}: ${code}`, { duration: 10000 });
-        setAuthStep('2fa');
-      } else {
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        setGeneratedCode(code);
-        toast.info(`Verification code sent to your email: ${code}`, { duration: 10000 });
-        setAuthStep('2fa');
-      }
-    } catch (err: any) {
-      console.error("Microsoft Auth error:", err);
-      if (err.code === 'auth/popup-closed-by-user') {
-        toast.info("Connexion annulée.");
-      } else if (err.code === 'auth/popup-blocked') {
-        toast.error("Le popup de connexion a été bloqué par votre navigateur.");
-      } else {
-        toast.error("Échec de la connexion avec Microsoft.");
+        toast.error(`Échec de la connexion avec Google: ${err.message}`);
       }
     } finally {
       setIsLoading(false);
@@ -436,7 +476,26 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
 
   const handleVerifyMfa = (e: React.FormEvent) => {
     e.preventDefault();
-    if (mfaCode === generatedCode || (mfaCode === "123456" && mfaMethod === 'app')) {
+    
+    let isValid = false;
+    if (mfaMethod === 'google') {
+      const totp = new OTPAuth.TOTP({
+        issuer: "HypeRemote",
+        label: auth.currentUser?.email || "user",
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: mfaSecret,
+      });
+      const delta = totp.validate({ token: mfaCode, window: 1 });
+      isValid = delta !== null;
+    } else if (mfaMethod === 'email') {
+      isValid = mfaCode === generatedCode;
+    } else {
+      isValid = false;
+    }
+
+    if (isValid) {
       toast.success("Verification successful!");
       if (onLogin) onLogin();
     } else {
@@ -444,12 +503,45 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
     }
   };
 
-  const handleSetupMfa = (e: React.FormEvent) => {
+  const handleSetupMfa = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (mfaCode === "123456" || mfaMethod === 'email' || mfaMethod === 'sms') {
-      setSavedMfaMethod(mfaMethod);
-      toast.success(`2FA configured with ${mfaMethod === 'google' ? 'Google' : mfaMethod === 'microsoft' ? 'Microsoft' : mfaMethod.toUpperCase()}!`);
-      if (onLogin) onLogin();
+    
+    let isValid = false;
+    if (mfaMethod === 'google') {
+      const totp = new OTPAuth.TOTP({
+        issuer: "HypeRemote",
+        label: auth.currentUser?.email || "user",
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: mfaSecret,
+      });
+      const delta = totp.validate({ token: mfaCode, window: 1 });
+      isValid = delta !== null;
+    } else {
+      // For email in this demo, we auto-verify
+      isValid = true;
+    }
+
+    if (isValid) {
+      try {
+        if (auth.currentUser) {
+          const updates: any = {
+            mfaMethod: mfaMethod,
+            mfaSecret: mfaSecret
+          };
+          
+          await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+            ...updates
+          });
+        }
+        setSavedMfaMethod(mfaMethod);
+        toast.success(`2FA configured with ${mfaMethod === 'google' ? 'Google Authenticator' : 'Email'}!`);
+        if (onLogin) onLogin();
+      } catch (err) {
+        console.error("Failed to save MFA:", err);
+        toast.error("Failed to save MFA settings.");
+      }
     } else {
       toast.error("Invalid verification code.");
     }
@@ -684,7 +776,30 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
 
           {authStep === 'login' ? (
             <>
-              {/* Login Form */}
+              {/* Social Login - Primary */}
+              <div className="mb-8">
+                <Button 
+                  variant="outline" 
+                  className="w-full h-14 bg-background border-border/60 hover:bg-accent text-lg font-bold shadow-sm"
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={isLoading}
+                >
+                  <Mail className="mr-3 size-6 text-red-500" />
+                  Continue with Google
+                </Button>
+              </div>
+
+              <div className="relative mb-8">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border/60" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground font-bold tracking-widest">Or continue with email</span>
+                </div>
+              </div>
+
+              {/* Login Form - Secondary */}
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-sm font-medium">Email</Label>
@@ -762,30 +877,6 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
                 </Button>
               </form>
 
-              {/* Social Login */}
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                <Button 
-                  variant="outline" 
-                  className="h-12 bg-background border-border/60 hover:bg-accent"
-                  type="button"
-                  onClick={handleGoogleLogin}
-                  disabled={isLoading}
-                >
-                  <Mail className="mr-2 size-5 text-red-500" />
-                  Google
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="h-12 bg-background border-border/60 hover:bg-accent"
-                  type="button"
-                  onClick={handleMicrosoftLogin}
-                  disabled={isLoading}
-                >
-                  <Shield className="mr-2 size-5 text-blue-500" />
-                  Microsoft
-                </Button>
-              </div>
-
               {/* Sign Up Link */}
               <div className="text-center text-sm text-muted-foreground mt-8">
                 {isSignUp ? "Already have an account? " : "Don't have an account? "}
@@ -795,6 +886,26 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
                 >
                   {isSignUp ? "Log in" : "Sign Up"}
                 </button>
+              </div>
+
+              <div className="flex justify-center">
+                <button 
+                  onClick={() => authHelpers.clearAllSessions()}
+                  className="text-xs text-muted-foreground hover:text-foreground mt-8"
+                >
+                  Clear all sessions (for testing)
+                </button>
+              </div>
+
+              {/* Mobile Link QR Code */}
+              <div className="mt-12 pt-8 border-t border-border/40 flex flex-col items-center gap-4">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Open on your iPhone</p>
+                <div className="bg-white p-2 rounded-lg shadow-sm border border-border/40">
+                  <QRCode value={window.location.href} size={80} />
+                </div>
+                <p className="text-[10px] text-muted-foreground text-center max-w-[200px]">
+                  Scan to open HypeRemote on your mobile device and test real-time features.
+                </p>
               </div>
             </>
           ) : authStep === 'setup-2fa' ? (
@@ -817,23 +928,10 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
                 </button>
 
                 <button 
-                  onClick={() => setMfaMethod('sms')}
-                  className={cn(
-                    "flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left",
-                    mfaMethod === 'sms' ? "border-primary bg-primary/5" : "border-border/60 hover:border-border"
-                  )}
-                >
-                  <div className={cn("p-2 rounded-lg", mfaMethod === 'sms' ? "bg-primary text-white" : "bg-muted text-muted-foreground")}>
-                    <Smartphone size={20} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-sm">SMS Verification</p>
-                    <p className="text-xs text-muted-foreground">Receive a code on your mobile phone</p>
-                  </div>
-                </button>
-
-                <button 
-                  onClick={() => setMfaMethod('google')}
+                  onClick={() => {
+                    setMfaMethod('google');
+                    toast.info("Google Authenticator selected. Scan the QR code below.");
+                  }}
                   className={cn(
                     "flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left",
                     mfaMethod === 'google' ? "border-primary bg-primary/5" : "border-border/60 hover:border-border"
@@ -847,32 +945,18 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
                     <p className="text-xs text-muted-foreground">Use Google Auth App for secure OTP</p>
                   </div>
                 </button>
-
-                <button 
-                  onClick={() => setMfaMethod('microsoft')}
-                  className={cn(
-                    "flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left",
-                    mfaMethod === 'microsoft' ? "border-primary bg-primary/5" : "border-border/60 hover:border-border"
-                  )}
-                >
-                  <div className={cn("p-2 rounded-lg", mfaMethod === 'microsoft' ? "bg-primary text-white" : "bg-muted text-muted-foreground")}>
-                    <Lock size={20} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-sm">Microsoft Authenticator</p>
-                    <p className="text-xs text-muted-foreground">Use Microsoft Auth App for secure OTP</p>
-                  </div>
-                </button>
               </div>
 
-              {(mfaMethod === 'google' || mfaMethod === 'microsoft') && (
+              {mfaMethod === 'google' && (
                 <div className="p-6 bg-muted/30 rounded-2xl border border-border/60 flex flex-col items-center space-y-4 animate-in zoom-in-95 duration-300">
                   <div className="bg-white p-3 rounded-lg shadow-sm">
-                    <div className="w-32 h-32 bg-slate-900 flex items-center justify-center text-white text-[10px] text-center p-2">
-                      [QR CODE MOCK]
-                      <br />
-                      Scan with {mfaMethod === 'google' ? 'Google' : 'Microsoft'} Auth App
-                    </div>
+                    {mfaQrUrl ? (
+                      <QRCode value={mfaQrUrl} size={128} />
+                    ) : (
+                      <div className="w-32 h-32 bg-slate-900 flex items-center justify-center text-white text-[10px] text-center p-2">
+                        Generating QR Code...
+                      </div>
+                    )}
                   </div>
                   <div className="w-full space-y-2">
                     <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Enter code from app</Label>
@@ -886,29 +970,8 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
                 </div>
               )}
 
-              {mfaMethod === 'sms' && (
-                <div className="p-6 bg-muted/30 rounded-2xl border border-border/60 space-y-4 animate-in zoom-in-95 duration-300">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Phone Number</Label>
-                    <Input 
-                      placeholder="+33 6 00 00 00 00" 
-                      className="h-12"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Verification Code</Label>
-                    <Input 
-                      placeholder="000 000" 
-                      className="h-12 text-center text-xl font-mono tracking-[0.5em]"
-                      value={mfaCode}
-                      onChange={(e) => setMfaCode(e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-
               <Button onClick={handleSetupMfa} className="w-full h-12 text-base font-medium">
-                {(mfaMethod === 'google' || mfaMethod === 'microsoft' || mfaMethod === 'sms') ? "Verify and Save" : "Save and Continue"}
+                {mfaMethod === 'google' ? "Verify and Save" : "Save and Continue"}
               </Button>
             </div>
           ) : (
@@ -955,10 +1018,14 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
                     type="button" 
                     variant="ghost" 
                     className="w-full"
-                    onClick={() => {
+                    onClick={async () => {
                       const code = Math.floor(100000 + Math.random() * 900000).toString();
                       setGeneratedCode(code);
-                      toast.info(`New code sent: ${code}`);
+                      if (mfaMethod === 'email') {
+                        toast.info(`New code sent to ${email}: ${code}`);
+                      } else {
+                        toast.info(`New code generated: ${code}`);
+                      }
                     }}
                   >
                     Resend Code
@@ -966,35 +1033,7 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
                 </div>
               </form>
 
-              <div className="pt-4 border-t border-border/40">
-                <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">Try another method</p>
-                <div className="grid grid-cols-3 gap-3">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className={cn("text-[10px] font-bold h-9", mfaMethod === 'email' && "border-primary text-primary bg-primary/5")}
-                    onClick={() => setMfaMethod('email')}
-                  >
-                    Email
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className={cn("text-[10px] font-bold h-9", mfaMethod === 'sms' && "border-primary text-primary bg-primary/5")}
-                    onClick={() => setMfaMethod('sms')}
-                  >
-                    SMS
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className={cn("text-[10px] font-bold h-9", mfaMethod === 'app' && "border-primary text-primary bg-primary/5")}
-                    onClick={() => setMfaMethod('app')}
-                  >
-                    App
-                  </Button>
-                </div>
-              </div>
+              {/* Provider-specific MFA is enforced based on login method */}
 
               <button 
                 onClick={() => setAuthStep('login')}

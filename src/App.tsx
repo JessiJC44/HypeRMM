@@ -15,6 +15,10 @@ import { Reports } from './components/Reports';
 import { ReferFriend } from './components/ReferFriend';
 import { Admin } from './components/Admin';
 import { AICenter } from './components/AICenter';
+import { AgentDownload } from './components/AgentDownload';
+import { TOTPSetup } from './components/TOTPSetup';
+import { TOTPVerify } from './components/TOTPVerify';
+import { EmailCodeVerify } from './components/EmailCodeVerify';
 import { Toaster } from '@/components/ui/sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -46,6 +50,11 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [user, setUser] = React.useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = React.useState(true);
+  const [isMfaVerified, setIsMfaVerified] = React.useState(false);
+  const [authMethod, setAuthMethod] = React.useState<'google' | 'email' | null>(null);
+  const [totpVerified, setTotpVerified] = React.useState(false);
+  const [emailCodeVerified, setEmailCodeVerified] = React.useState(false);
+  const [userTotpEnabled, setUserTotpEnabled] = React.useState<boolean | null>(null);
   const [isDarkMode, setIsDarkMode] = React.useState(false);
   const [needsEmailVerification, setNeedsEmailVerification] = React.useState(false);
   const { language, setLanguage, t } = useLanguage();
@@ -61,34 +70,29 @@ export default function App() {
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Reload to get latest emailVerified status
-        await firebaseUser.reload();
+        setUser(firebaseUser);
         
-        if (!firebaseUser.emailVerified) {
-          setUser(firebaseUser);
-          setNeedsEmailVerification(true);
-        } else {
-          setUser(firebaseUser);
-          setNeedsEmailVerification(false);
-          
-          // Ensure user exists in Firestore
-          const userDocRef = doc(db, 'users', firebaseUser.uid);
-          const userDoc = await getDoc(userDocRef);
-          
-          if (!userDoc.exists()) {
-            await setDoc(userDocRef, {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL,
-              role: 'user',
-              createdAt: serverTimestamp()
-            });
-          }
+        // Determine auth method
+        const provider = firebaseUser.providerData[0]?.providerId;
+        const method = provider === 'google.com' ? 'google' : 'email';
+        setAuthMethod(method);
+        
+        // Check if TOTP is enabled for Google users
+        if (method === 'google') {
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          const userData = userDoc.data();
+          setUserTotpEnabled(userData?.totpEnabled || false);
         }
+        
+        // Reset verification states on new login
+        setTotpVerified(false);
+        setEmailCodeVerified(false);
       } else {
         setUser(null);
-        setNeedsEmailVerification(false);
+        setAuthMethod(null);
+        setUserTotpEnabled(null);
+        setTotpVerified(false);
+        setEmailCodeVerified(false);
       }
       setIsAuthLoading(false);
     });
@@ -107,10 +111,30 @@ export default function App() {
   if (!user) {
     return (
       <>
-        <AnimatedCharactersLoginPage />
+        <AnimatedCharactersLoginPage onLogin={() => {}} />
         <Toaster position="bottom-right" />
       </>
     );
+  }
+
+  // Google login flow
+  if (authMethod === 'google') {
+    if (userTotpEnabled === false) {
+      // First time - setup TOTP
+      return <TOTPSetup user={user} onComplete={() => {
+        setUserTotpEnabled(true);
+        setTotpVerified(true);
+      }} />;
+    }
+    if (userTotpEnabled === true && !totpVerified) {
+      // Returning user - verify TOTP
+      return <TOTPVerify user={user} onVerified={() => setTotpVerified(true)} />;
+    }
+  }
+
+  // Email login flow
+  if (authMethod === 'email' && !emailCodeVerified) {
+    return <EmailCodeVerify user={user} onVerified={() => setEmailCodeVerified(true)} />;
   }
 
   if (needsEmailVerification && user) {
@@ -123,6 +147,8 @@ export default function App() {
         return <Dashboard />;
       case 'rmm':
         return <RMMDashboard />;
+      case 'agent-download':
+        return <AgentDownload />;
       case 'tickets':
         return <Ticketing />;
       case 'assets':

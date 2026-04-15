@@ -90,12 +90,16 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isAuthenticated() && isOwner(userId) && 
-                      hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt']) &&
+                      hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt', 'mfaSecret', 'mfaMethod', 'phoneNumber', 'totpEnabled', 'totpSecret']) &&
                       request.resource.data.role == 'user'; // Default role
       allow update: if isAuthenticated() && isOwner(userId) && 
-                      hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt']) &&
+                      hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt', 'mfaSecret', 'mfaMethod', 'phoneNumber', 'totpEnabled', 'totpSecret']) &&
                       request.resource.data.role == resource.data.role; // Prevent self-role-escalation
       allow delete: if isAdmin();
+    }
+
+    match /emailCodes/{docId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == docId;
     }
 
     match /devices/{deviceId} {
