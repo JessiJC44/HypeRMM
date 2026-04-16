@@ -29,13 +29,50 @@ export function Alerts() {
     return () => unsubscribe();
   }, []);
 
-  const resolveAlert = (id: string) => {
-    // In a real app, we would mark it as resolved in Firestore
-    toast.success("Alert resolved successfully");
+  const resolveAlert = async (id: string) => {
+    try {
+      await firestoreService.deleteAlert(id);
+      toast.success("Alert resolved successfully");
+    } catch (error) {
+      toast.error("Failed to resolve alert");
+    }
   };
 
-  const createTicket = (device: string) => {
-    toast.info(`Creating ticket for ${device}...`);
+  const createTicketFromAlert = async (alert: Alert) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      await firestoreService.addTicket(user.uid, {
+        title: `Alert: ${alert.message}`,
+        customer: alert.deviceName,
+        priority: alert.severity === 'critical' ? 'critical' : 'medium',
+        assignedTo: 'Unassigned',
+        status: 'open'
+      });
+      toast.success(`Ticket created for ${alert.deviceName}`);
+      // Optional: resolve alert after ticket creation
+      await firestoreService.deleteAlert(alert.id);
+    } catch (error) {
+      toast.error("Failed to create ticket");
+    }
+  };
+
+  const handleResolveAll = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    if (alerts.length === 0) {
+      toast.info("No alerts to resolve");
+      return;
+    }
+
+    try {
+      await firestoreService.deleteAllAlerts(user.uid);
+      toast.success(`Resolved ${alerts.length} alerts`);
+    } catch (error) {
+      toast.error("Failed to resolve alerts");
+    }
   };
 
   const criticalCount = alerts.filter(a => a.severity === 'critical').length;
@@ -55,7 +92,7 @@ export function Alerts() {
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <Button variant="outline" className="rounded-xl px-6 h-11 border-border bg-card font-bold text-muted-foreground hover:bg-muted/50 transition-all w-full sm:w-auto">Alert Settings</Button>
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 h-11 font-bold shadow-lg shadow-primary/10 transition-all hover:scale-[1.02] w-full sm:w-auto">
+          <Button onClick={handleResolveAll} className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 h-11 font-bold shadow-lg shadow-primary/10 transition-all hover:scale-[1.02] w-full sm:w-auto">
             Resolve All
           </Button>
         </div>
@@ -185,7 +222,7 @@ export function Alerts() {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        onClick={() => createTicket(alert.deviceName)}
+                        onClick={() => createTicketFromAlert(alert)}
                         className="text-primary font-black uppercase text-[10px] tracking-widest hover:bg-primary/10 rounded-lg h-9 px-4 gap-2"
                       >
                         <Ticket size={14} strokeWidth={3} />

@@ -5,10 +5,30 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { motion } from 'motion/react';
+import { toast } from 'sonner';
 import { getSoftwareLogo } from './SoftwareLogos';
 import { cn } from '@/lib/utils';
 
 export function AppCenter() {
+  const [installedApps, setInstalledApps] = React.useState<string[]>(['Flux', 'Chocolatey', 'Bitdefender']);
+  const [installing, setInstalling] = React.useState<string | null>(null);
+
+  const handleInstallApp = async (appName: string) => {
+    setInstalling(appName);
+    toast.info(`Installing ${appName}...`);
+    
+    // Simulate installation
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    setInstalledApps(prev => [...prev, appName]);
+    setInstalling(null);
+    toast.success(`${appName} installed successfully!`);
+  };
+
+  const handleManageApp = (appName: string) => {
+    toast.info(`Opening ${appName} management...`);
+  };
+
   const apps = [
     { 
       name: 'Flux', 
@@ -92,17 +112,26 @@ export function AppCenter() {
                     </div>
                     <Badge className={cn(
                       "text-[10px] font-bold border-none px-3 py-1 rounded-full",
-                      app.status === 'Installed' ? "bg-emerald-500/10 text-emerald-500" : "bg-primary/10 text-primary"
+                      installedApps.includes(app.name) ? "bg-emerald-500/10 text-emerald-500" : "bg-primary/10 text-primary"
                     )}>
-                      {app.status}
+                      {installedApps.includes(app.name) ? 'Installed' : 'Available'}
                     </Badge>
                   </div>
                   <h3 className="text-lg font-bold text-foreground">{app.name}</h3>
                   <p className="text-xs text-muted-foreground font-medium mb-6">{app.developer}</p>
                   <div className="flex items-center justify-between pt-4 border-t border-border">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{app.category}</span>
-                    <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10 h-9 px-4 rounded-xl">
-                      {app.status === 'Installed' ? 'Manage' : 'Install'}
+                    <Button 
+                      onClick={() => installedApps.includes(app.name) 
+                        ? handleManageApp(app.name) 
+                        : handleInstallApp(app.name)
+                      }
+                      disabled={installing === app.name}
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-primary font-bold hover:bg-primary/10 h-9 px-4 rounded-xl"
+                    >
+                      {installing === app.name ? 'Installing...' : (installedApps.includes(app.name) ? 'Manage' : 'Install')}
                     </Button>
                   </div>
                 </div>

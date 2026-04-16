@@ -17,6 +17,7 @@ export function PatchManagement() {
   const [patches, setPatches] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [approving, setApproving] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const user = auth.currentUser;
@@ -37,6 +38,46 @@ export function PatchManagement() {
       setIsSubmitting(false);
       toast.success("Patch deployment started successfully");
     }, 2000);
+  };
+
+  const handleApprovePatch = async (patchId: string, title: string) => {
+    setApproving(patchId);
+    try {
+      await firestoreService.updatePatch(patchId, { 
+        approved: true, 
+        approvedAt: new Date().toISOString() 
+      });
+      toast.success(`Patch "${title}" approved`);
+    } catch (error) {
+      toast.error("Failed to approve patch");
+    } finally {
+      setApproving(null);
+    }
+  };
+
+  const handleApproveAllCritical = async () => {
+    const criticalPatches = patches.filter(p => p.severity === 'critical' && !p.approved);
+    
+    if (criticalPatches.length === 0) {
+      toast.info("No critical patches to approve");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const approvals = criticalPatches.map(patch => 
+        firestoreService.updatePatch(patch.id, { 
+          approved: true, 
+          approvedAt: new Date().toISOString() 
+        })
+      );
+      await Promise.all(approvals);
+      toast.success(`Approved ${criticalPatches.length} critical patches`);
+    } catch (error) {
+      toast.error("Failed to approve patches");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const criticalCount = patches.filter(p => p.severity === 'critical').length;
@@ -136,7 +177,14 @@ export function PatchManagement() {
                       Filter
                     </Button>
                   </div>
-                  <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full font-bold">Approve All Critical</Button>
+                  <Button 
+                    onClick={handleApproveAllCritical}
+                    disabled={isSubmitting}
+                    size="sm" 
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full font-bold"
+                  >
+                    {isSubmitting ? 'Approving...' : 'Approve All Critical'}
+                  </Button>
                 </div>
                 <table className="w-full text-sm">
                   <thead>
@@ -183,7 +231,15 @@ export function PatchManagement() {
                           </td>
                           <td className="py-4 px-6 text-muted-foreground font-medium whitespace-nowrap">{patch.deviceCount || 0} devices</td>
                           <td className="py-4 px-6 text-right whitespace-nowrap">
-                            <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10">Approve</Button>
+                            <Button 
+                              onClick={() => handleApprovePatch(patch.id, patch.title)}
+                              disabled={approving === patch.id || patch.approved}
+                              variant="ghost" 
+                              size="sm" 
+                              className="text-primary font-bold hover:bg-primary/10"
+                            >
+                              {patch.approved ? 'Approved' : (approving === patch.id ? 'Approving...' : 'Approve')}
+                            </Button>
                           </td>
                         </motion.tr>
                       ))

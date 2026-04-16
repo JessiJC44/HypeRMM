@@ -52,8 +52,9 @@ const chartData = [
 import { firestoreService } from '../services/firestoreService';
 
 import { auth } from '../lib/firebase';
+import { toast } from 'sonner';
 
-export function Dashboard() {
+export function Dashboard({ setActiveTab }: { setActiveTab: (tab: string) => void }) {
   const [stats, setStats] = React.useState<any>(null);
   const [alerts, setAlerts] = React.useState<Alert[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -76,6 +77,37 @@ export function Dashboard() {
     fetchStats();
     return () => unsubscribeAlerts();
   }, []);
+
+  const handleGenerateReport = () => {
+    const reportContent = `HypeRemote Dashboard Report
+Generated: ${new Date().toLocaleString()}
+
+SUMMARY
+=======
+Open Tickets: ${stats.openTickets}
+Managed Devices: ${stats.managedDevices}
+Active Alerts: ${stats.activeAlerts}
+SLA Compliance: ${stats.slaCompliance}
+
+RECENT ALERTS
+=============
+${alerts.slice(0, 5).map(a => `• ${a.deviceName}: ${a.message} (${a.severity})`).join('\n')}
+
+WEEKLY PERFORMANCE
+==================
+${chartData.map(d => `${d.name}: ${d.tickets} tickets, ${d.alerts} alerts`).join('\n')}
+`;
+
+    const blob = new Blob([reportContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `hyperemote-report-${new Date().toISOString().split('T')[0]}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    toast.success("Report downloaded!");
+  };
 
   if (loading || !stats) {
     return (
@@ -135,7 +167,10 @@ export function Dashboard() {
           <h1 className="text-2xl lg:text-3xl font-bold text-foreground tracking-tight">{t('dashboard.title')}</h1>
           <p className="text-sm text-muted-foreground font-medium">{t('dashboard.subtitle')}</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 h-12 font-bold shadow-lg shadow-primary/10 w-full sm:w-auto">
+        <Button 
+          onClick={handleGenerateReport}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 h-12 font-bold shadow-lg shadow-primary/10 w-full sm:w-auto"
+        >
           {t('dashboard.generate_report')}
         </Button>
       </motion.div>
@@ -324,7 +359,11 @@ export function Dashboard() {
               <TooltipProvider>
                 <ShadcnTooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" className="w-full mt-6 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-xl h-10">
+                    <Button 
+                      onClick={() => setActiveTab('alerts')}
+                      variant="ghost" 
+                      className="w-full mt-6 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-xl h-10"
+                    >
                       {t('dashboard.view_all_alerts')}
                     </Button>
                   </TooltipTrigger>

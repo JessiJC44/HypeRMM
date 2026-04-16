@@ -44,6 +44,27 @@ export const firestoreService = {
     }
   },
 
+  updateTicket: async (ticketId: string, data: Partial<Ticket>) => {
+    try {
+      await updateDoc(doc(db, 'tickets', ticketId), {
+        ...data,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'tickets');
+      throw error;
+    }
+  },
+
+  deleteTicket: async (ticketId: string) => {
+    try {
+      await deleteDoc(doc(db, 'tickets', ticketId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'tickets');
+      throw error;
+    }
+  },
+
   // Devices
   subscribeToDevices: (userId: string, callback: (devices: Device[]) => void) => {
     const q = query(
@@ -101,6 +122,29 @@ export const firestoreService = {
     }
   },
 
+  // Delete Alert
+  deleteAlert: async (alertId: string) => {
+    try {
+      await deleteDoc(doc(db, 'alerts', alertId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'alerts');
+      throw error;
+    }
+  },
+
+  // Delete multiple alerts
+  deleteAllAlerts: async (userId: string) => {
+    try {
+      const q = query(collection(db, 'alerts'), where('userId', '==', userId));
+      const snapshot = await getDocs(q);
+      const deletions = snapshot.docs.map(d => deleteDoc(doc(db, 'alerts', d.id)));
+      await Promise.all(deletions);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'alerts');
+      throw error;
+    }
+  },
+
   // Sites
   subscribeToSites: (userId: string, callback: (sites: any[]) => void) => {
     const q = query(
@@ -126,6 +170,27 @@ export const firestoreService = {
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'sites');
+    }
+  },
+
+  updateSite: async (siteId: string, data: any) => {
+    try {
+      await updateDoc(doc(db, 'sites', siteId), {
+        ...data,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'sites');
+      throw error;
+    }
+  },
+
+  deleteSite: async (siteId: string) => {
+    try {
+      await deleteDoc(doc(db, 'sites', siteId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'sites');
+      throw error;
     }
   },
 
@@ -159,6 +224,18 @@ export const firestoreService = {
       }));
       callback(patches);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'patches'));
+  },
+
+  updatePatch: async (patchId: string, data: any) => {
+    try {
+      await updateDoc(doc(db, 'patches', patchId), {
+        ...data,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'patches');
+      throw error;
+    }
   },
 
   // Users

@@ -4,7 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { motion } from 'motion/react';
+import { cn } from '@/lib/utils';
 
 import { firestoreService } from '../services/firestoreService';
 import { toast } from 'sonner';
@@ -15,6 +24,8 @@ export function Sites() {
   const [sites, setSites] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [selectedSite, setSelectedSite] = React.useState<any>(null);
+  const [detailsOpen, setDetailsOpen] = React.useState(false);
 
   React.useEffect(() => {
     const user = auth.currentUser;
@@ -57,6 +68,21 @@ export function Sites() {
       toast.error("Failed to add site");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const viewSiteDetails = (site: any) => {
+    setSelectedSite(site);
+    setDetailsOpen(true);
+  };
+
+  const handleDeleteSite = async (siteId: string) => {
+    try {
+      await firestoreService.deleteSite(siteId);
+      toast.success("Site deleted");
+      setDetailsOpen(false);
+    } catch (error) {
+      toast.error("Failed to delete site");
     }
   };
 
@@ -157,7 +183,12 @@ export function Sites() {
                       <MapPin size={14} />
                       <span className="text-xs font-medium">{site.location}</span>
                     </div>
-                    <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10">
+                    <Button 
+                      onClick={() => viewSiteDetails(site)}
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-primary font-bold hover:bg-primary/10"
+                    >
                       View Details
                     </Button>
                   </div>
@@ -168,8 +199,54 @@ export function Sites() {
           })
         )}
       </div>
+
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">{selectedSite?.name}</DialogTitle>
+            <DialogDescription className="text-muted-foreground">{selectedSite?.customer}</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Location</p>
+              <p className="text-lg font-bold text-foreground">{selectedSite?.location}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Status</p>
+              <Badge className={selectedSite?.status === 'Healthy' ? 'bg-emerald-500' : 'bg-amber-500'}>
+                {selectedSite?.status}
+              </Badge>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Devices</p>
+              <p className="text-lg font-bold text-foreground">{selectedSite?.devices}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Users</p>
+              <p className="text-lg font-bold text-foreground">{selectedSite?.users}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Type</p>
+              <p className="text-lg font-bold capitalize text-foreground">{selectedSite?.type}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">SLA</p>
+              <p className="text-lg font-bold text-emerald-500">99.9%</p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="destructive" 
+              onClick={() => selectedSite && handleDeleteSite(selectedSite.id)}
+            >
+              Delete Site
+            </Button>
+            <Button variant="outline" className="border-border text-foreground" onClick={() => setDetailsOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-
-import { cn } from '@/lib/utils';

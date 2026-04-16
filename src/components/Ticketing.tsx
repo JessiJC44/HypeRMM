@@ -8,6 +8,14 @@ import {
   User,
   MessageSquare
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { 
   Table, 
   TableBody, 
@@ -90,6 +98,24 @@ export function Ticketing() {
       toast.error("Failed to create ticket");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteTicket = async (ticketId: string) => {
+    try {
+      await firestoreService.deleteTicket(ticketId);
+      toast.success("Ticket deleted");
+    } catch (error) {
+      toast.error("Failed to delete ticket");
+    }
+  };
+
+  const handleChangeStatus = async (ticketId: string, newStatus: string) => {
+    try {
+      await firestoreService.updateTicket(ticketId, { status: newStatus as any });
+      toast.success(`Ticket marked as ${newStatus}`);
+    } catch (error) {
+      toast.error("Failed to update ticket");
     }
   };
 
@@ -326,7 +352,7 @@ export function Ticketing() {
                             variant="ghost" 
                             size="icon" 
                             className="h-9 w-9 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all"
-                            onClick={() => toast.info(`Opening chat for ticket ${ticket.id}`)}
+                            onClick={() => toast.info(`Chat feature coming soon for ticket ${ticket.id}`)}
                           >
                             <MessageSquare size={18} />
                           </Button>
@@ -336,23 +362,37 @@ export function Ticketing() {
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
-                            onClick={() => toast.info(`Opening options for ticket ${ticket.id}`)}
-                          >
-                            <MoreVertical size={18} />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="text-xs">More ticket actions.</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+                        >
+                          <MoreVertical size={18} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleChangeStatus(ticket.id, 'pending')}>
+                          Mark as Pending
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleChangeStatus(ticket.id, 'resolved')}>
+                          Mark as Resolved
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleChangeStatus(ticket.id, 'open')}>
+                          Reopen Ticket
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => handleDeleteTicket(ticket.id)}
+                          className="text-rose-500 focus:text-rose-500"
+                        >
+                          Delete Ticket
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </TableCell>
               </motion.tr>
