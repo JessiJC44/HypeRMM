@@ -44,7 +44,9 @@ export function TOTPVerify({ user, onVerified }: Props) {
         toast.success('Verification successful!');
         onVerified();
       } else {
-        toast.error('Invalid code. Please try again.');
+        toast.error('Incorrect code', {
+          position: 'top-right',
+        });
         setCode('');
       }
     } catch (error) {

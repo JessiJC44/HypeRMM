@@ -68,7 +68,10 @@ export function TOTPSetup({ user, onComplete }: Props) {
         toast.success('2FA enabled successfully!');
         onComplete();
       } else {
-        toast.error('Invalid code. Please try again.');
+        toast.error('Incorrect code', {
+          position: 'top-right',
+        });
+        setCode('');
       }
     } catch (error) {
       toast.error('Verification failed');

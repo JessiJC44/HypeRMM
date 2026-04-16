@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
+import { getSoftwareLogo } from './SoftwareLogos';
 
 import { firestoreService } from '../services/firestoreService';
 
@@ -123,16 +124,25 @@ export function SoftwareInventory() {
                   </td>
                 </tr>
               ) : (
-                software.map((sw, i) => (
-                  <motion.tr 
-                    key={sw.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 + (i * 0.05) }}
-                    className="hover:bg-muted/20 transition-colors"
-                  >
-                    <td className="py-4 px-6 font-black text-foreground whitespace-nowrap">{sw.name}</td>
-                    <td className="py-4 px-6 text-muted-foreground font-bold whitespace-nowrap">{sw.publisher}</td>
+                software.map((sw, i) => {
+                  const Logo = getSoftwareLogo(sw.name);
+                  return (
+                    <motion.tr 
+                      key={sw.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5 + (i * 0.05) }}
+                      className="hover:bg-muted/20 transition-colors"
+                    >
+                      <td className="py-4 px-6 font-black text-foreground whitespace-nowrap">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-muted/30 rounded-lg flex items-center justify-center p-1 border border-border">
+                            <Logo size={20} />
+                          </div>
+                          {sw.name}
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-muted-foreground font-bold whitespace-nowrap">{sw.publisher}</td>
                     <td className="py-4 px-6 text-muted-foreground font-bold whitespace-nowrap">{sw.version}</td>
                     <td className="py-4 px-6 whitespace-nowrap">
                       <Badge variant="secondary" className="bg-brand-blue/10 text-brand-blue border-none text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-3 py-1 rounded-full">{sw.installCount || 0} devices</Badge>
@@ -144,8 +154,9 @@ export function SoftwareInventory() {
                       </Button>
                     </td>
                   </motion.tr>
-                ))
-              )}
+                );
+              })
+            )}
             </tbody>
           </table>
         </div>

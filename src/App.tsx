@@ -112,7 +112,7 @@ export default function App() {
     return (
       <>
         <AnimatedCharactersLoginPage onLogin={() => {}} />
-        <Toaster position="bottom-right" />
+        <Toaster position="top-right" />
       </>
     );
   }
@@ -121,24 +121,44 @@ export default function App() {
   if (authMethod === 'google') {
     if (userTotpEnabled === false) {
       // First time - setup TOTP
-      return <TOTPSetup user={user} onComplete={() => {
-        setUserTotpEnabled(true);
-        setTotpVerified(true);
-      }} />;
+      return (
+        <>
+          <TOTPSetup user={user} onComplete={() => {
+            setUserTotpEnabled(true);
+            setTotpVerified(true);
+          }} />
+          <Toaster position="top-right" />
+        </>
+      );
     }
     if (userTotpEnabled === true && !totpVerified) {
       // Returning user - verify TOTP
-      return <TOTPVerify user={user} onVerified={() => setTotpVerified(true)} />;
+      return (
+        <>
+          <TOTPVerify user={user} onVerified={() => setTotpVerified(true)} />
+          <Toaster position="top-right" />
+        </>
+      );
     }
   }
 
   // Email login flow
   if (authMethod === 'email' && !emailCodeVerified) {
-    return <EmailCodeVerify user={user} onVerified={() => setEmailCodeVerified(true)} />;
+    return (
+      <>
+        <EmailCodeVerify user={user} onVerified={() => setEmailCodeVerified(true)} />
+        <Toaster position="top-right" />
+      </>
+    );
   }
 
   if (needsEmailVerification && user) {
-    return <EmailVerificationScreen user={user} onVerified={() => setNeedsEmailVerification(false)} />;
+    return (
+      <>
+        <EmailVerificationScreen user={user} onVerified={() => setNeedsEmailVerification(false)} />
+        <Toaster position="top-right" />
+      </>
+    );
   }
 
   const renderContent = () => {
@@ -215,13 +235,13 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsSidebarOpen(false)}
-              className="fixed inset-0 bg-brand-navy/60 backdrop-blur-sm z-40 lg:hidden"
+              className="fixed inset-0 bg-brand-navy/80 z-40 lg:hidden"
             />
           )}
         </AnimatePresence>
         
         <main className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
-          <header className="h-16 lg:h-20 border-b border-border bg-background/80 backdrop-blur-md flex-shrink-0 z-30 flex items-center justify-between px-4 lg:px-10 shadow-sm">
+          <header className="h-16 lg:h-20 border-b border-border bg-background flex-shrink-0 z-30 flex items-center justify-between px-4 lg:px-10 shadow-sm">
             <div className="flex items-center gap-3 lg:gap-4">
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -337,7 +357,7 @@ export default function App() {
           </div>
         </main>
 
-        <Toaster position="bottom-right" />
+        <Toaster position="top-right" />
       </div>
     </TooltipProvider>
   </ErrorBoundary>

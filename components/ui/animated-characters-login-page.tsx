@@ -417,7 +417,7 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
         message = "Email/Password login is not enabled in Firebase Console.";
       }
       setError(message);
-      toast.error(message);
+      toast.error(message, { position: "top-right" });
     } finally {
       setIsLoading(false);
     }
@@ -499,7 +499,8 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
       toast.success("Verification successful!");
       if (onLogin) onLogin();
     } else {
-      toast.error("Invalid verification code.");
+      toast.error("Incorrect code", { position: "top-right" });
+      setMfaCode("");
     }
   };
 
@@ -540,10 +541,11 @@ export function AnimatedCharactersLoginPage({ onLogin }: { onLogin?: () => void 
         if (onLogin) onLogin();
       } catch (err) {
         console.error("Failed to save MFA:", err);
-        toast.error("Failed to save MFA settings.");
+        toast.error("Failed to save MFA settings.", { position: "top-right" });
       }
     } else {
-      toast.error("Invalid verification code.");
+      toast.error("Incorrect code", { position: "top-right" });
+      setMfaCode("");
     }
   };
 

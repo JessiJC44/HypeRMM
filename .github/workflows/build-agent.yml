@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,15 +21,15 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
+          cache: false
 
-      - name: Install dependencies
-        run: |
-          cd agent
-          go mod tidy
+      - name: Create dist directory
+        run: mkdir -p dist
 
       - name: Build for Windows
         run: |
           cd agent
+          go mod download
           GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ../dist/hyperemote-agent-windows.exe .
 
       - name: Build for Linux
@@ -44,7 +47,7 @@ jobs:
           cd agent
           GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ../dist/hyperemote-agent-mac-arm .
 
-      - name: Create install scripts in dist
+      - name: Copy install scripts
         run: |
           cp agent/installer/install-windows.ps1 dist/
           cp agent/installer/install-linux.sh dist/
@@ -58,7 +61,7 @@ jobs:
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/hyperemote-agent-windows.exe
@@ -68,5 +71,6 @@ jobs:
             dist/install-windows.ps1
             dist/install-linux.sh
             dist/install-mac.sh
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

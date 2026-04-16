@@ -93,7 +93,7 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, onClose, user }: Side
       {/* Sidebar container */}
       <div
         className={cn(
-          "fixed top-0 left-0 h-full bg-card border-r border-border z-40 transition-all duration-300 ease-in-out flex flex-col",
+          "fixed top-0 left-0 h-full bg-card border-r border-border z-50 transition-all duration-300 ease-in-out flex flex-col",
           isOpen ? "translate-x-0" : "-translate-x-full",
           isCollapsed ? "w-20" : "w-64",
           "lg:translate-x-0 lg:static lg:z-auto"

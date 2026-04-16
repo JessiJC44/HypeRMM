@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { motion } from 'motion/react';
+import { getSoftwareLogo } from './SoftwareLogos';
+import { cn } from '@/lib/utils';
 
 export function AppCenter() {
   const apps = [
@@ -71,49 +73,45 @@ export function AppCenter() {
       </motion.div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {apps.map((app, index) => (
-          <motion.div
-            key={app.name}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 * index }}
-            whileHover={{ y: -4 }}
-          >
-            <Card className="border-none shadow-sm hover:shadow-md transition-all group overflow-hidden bg-card rounded-2xl h-full">
-            <CardContent className="p-0">
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-6">
-                  <div className="w-16 h-16 bg-muted/20 rounded-2xl flex items-center justify-center p-3 group-hover:bg-muted/30 transition-colors border border-border">
-                    <img 
-                      src={app.logo} 
-                      alt={app.name} 
-                      className="max-w-full max-h-full object-contain"
-                      referrerPolicy="no-referrer"
-                    />
+        {apps.map((app, index) => {
+          const Logo = getSoftwareLogo(app.name);
+          return (
+            <motion.div
+              key={app.name}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1 * index }}
+              whileHover={{ y: -4 }}
+            >
+              <Card className="border-none shadow-sm hover:shadow-md transition-all group overflow-hidden bg-card rounded-2xl h-full">
+              <CardContent className="p-0">
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="w-16 h-16 bg-muted/20 rounded-2xl flex items-center justify-center p-3 group-hover:bg-muted/30 transition-colors border border-border">
+                      <Logo size={32} />
+                    </div>
+                    <Badge className={cn(
+                      "text-[10px] font-bold border-none px-3 py-1 rounded-full",
+                      app.status === 'Installed' ? "bg-emerald-500/10 text-emerald-500" : "bg-primary/10 text-primary"
+                    )}>
+                      {app.status}
+                    </Badge>
                   </div>
-                  <Badge className={cn(
-                    "text-[10px] font-bold border-none px-3 py-1 rounded-full",
-                    app.status === 'Installed' ? "bg-emerald-500/10 text-emerald-500" : "bg-primary/10 text-primary"
-                  )}>
-                    {app.status}
-                  </Badge>
+                  <h3 className="text-lg font-bold text-foreground">{app.name}</h3>
+                  <p className="text-xs text-muted-foreground font-medium mb-6">{app.developer}</p>
+                  <div className="flex items-center justify-between pt-4 border-t border-border">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{app.category}</span>
+                    <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10 h-9 px-4 rounded-xl">
+                      {app.status === 'Installed' ? 'Manage' : 'Install'}
+                    </Button>
+                  </div>
                 </div>
-                <h3 className="text-lg font-bold text-foreground">{app.name}</h3>
-                <p className="text-xs text-muted-foreground font-medium mb-6">{app.developer}</p>
-                <div className="flex items-center justify-between pt-4 border-t border-border">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{app.category}</span>
-                  <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10 h-9 px-4 rounded-xl">
-                    {app.status === 'Installed' ? 'Manage' : 'Install'}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      ))}
+              </CardContent>
+            </Card>
+          </motion.div>
+          );
+        })}
     </div>
     </div>
   );
 }
-
-import { cn } from '@/lib/utils';
