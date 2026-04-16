@@ -5,11 +5,49 @@ import {
 } from '@simplewebauthn/browser';
 import { doc, setDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { getAuthenticatorSelection } from '../utils/deviceDetector';
 
 export const passkeyService = {
   // Check if browser supports passkeys
-  isSupported: (): boolean => {
-    return browserSupportsWebAuthn();
+  isSupported: async (): Promise<boolean> => {
+    if (!browserSupportsWebAuthn()) return false;
+    
+    // Check if platform authenticator is available (biometrics)
+    try {
+      if (typeof window !== 'undefined' && 'PublicKeyCredential' in window) {
+        const platformAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        if (!platformAvailable) return false;
+
+        // Check for Permissions Policy block
+        // Check features specifically required by WebAuthn
+        const features = ['publickey-credentials-get', 'publickey-credentials-create'];
+        
+        // Legacy featurePolicy check
+        if ((document as any).featurePolicy) {
+          const policy = (document as any).featurePolicy;
+          const allowed = policy.allowedFeatures();
+          if (features.some(f => !allowed.includes(f))) {
+            console.warn("WebAuthn features are restricted by featurePolicy.");
+            return false;
+          }
+        }
+
+        // Modern permissionsPolicy check
+        if ((document as any).permissionsPolicy) {
+          const policy = (document as any).permissionsPolicy;
+          const allowed = policy.allowedFeatures();
+          if (features.some(f => !allowed.includes(f))) {
+            console.warn("WebAuthn features are restricted by permissionsPolicy.");
+            return false;
+          }
+        }
+
+        return true;
+      }
+    } catch {
+      return false;
+    }
+    return false;
   },
 
   // Check if user has registered passkeys
@@ -47,12 +85,13 @@ export const passkeyService = {
     try {
       // Generate registration options (Simplified for client-side demo)
       const challenge = crypto.randomUUID();
+      const rpId = window.location.hostname;
       
       const registrationOptions: any = {
         challenge: btoa(challenge),
         rp: {
           name: 'HypeRemote',
-          id: window.location.hostname,
+          id: rpId,
         },
         user: {
           id: btoa(userId),
@@ -65,11 +104,7 @@ export const passkeyService = {
         ],
         timeout: 60000,
         attestation: 'none',
-        authenticatorSelection: {
-          authenticatorAttachment: 'platform', // Built-in (Face ID, Touch ID)
-          userVerification: 'required',
-          residentKey: 'required',
-        },
+        authenticatorSelection: getAuthenticatorSelection(),
       };
 
       // Start registration (triggers Face ID / Touch ID)
@@ -90,9 +125,21 @@ export const passkeyService = {
       });
 
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Passkey registration failed:', error);
-      return false;
+      
+      // Enhanced error normalization for consistency across components
+      const errorName = error?.name || error?.code || '';
+      const errorMessage = error?.message || String(error);
+
+      if (errorName === 'SecurityError' || errorMessage.includes('Permissions Policy') || errorMessage.includes('feature is not enabled')) {
+        console.error("CRITICAL: WebAuthn registration is blocked by Permissions Policy.");
+        const normalizedError = new Error('Permissions Policy blocked WebAuthn');
+        (normalizedError as any).name = 'SecurityError';
+        throw normalizedError;
+      }
+      
+      throw error;
     }
   },
 
@@ -143,9 +190,20 @@ export const passkeyService = {
       }
 
       return false;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Passkey verification failed:', error);
-      return false;
+      
+      const errorName = error?.name || error?.code || '';
+      const errorMessage = error?.message || String(error);
+
+      if (errorName === 'SecurityError' || errorMessage.includes('Permissions Policy') || errorMessage.includes('feature is not enabled')) {
+        console.error("CRITICAL: WebAuthn verification is blocked by Permissions Policy.");
+        const normalizedError = new Error('Permissions Policy blocked WebAuthn');
+        (normalizedError as any).name = 'SecurityError';
+        throw normalizedError;
+      }
+      
+      throw error;
     }
   },
 

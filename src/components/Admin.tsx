@@ -15,6 +15,7 @@ import { Fingerprint } from 'lucide-react';
 import { auth, db } from '@/src/lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { passkeyService } from '../services/passkeyService';
+import { getBiometricMethod } from '../utils/deviceDetector';
 
 import { firestoreService } from '../services/firestoreService';
 
@@ -37,8 +38,16 @@ export function Admin() {
   // Passkey State
   const [registeringPasskey, setRegisteringPasskey] = React.useState(false);
   const [userPasskeys, setUserPasskeys] = React.useState<any[]>([]);
+  const [passkeySupported, setPasskeySupported] = React.useState(false);
+  const biometricMethod = getBiometricMethod();
 
   React.useEffect(() => {
+    const checkSupport = async () => {
+      const supported = await passkeyService.isSupported();
+      setPasskeySupported(supported);
+    };
+    checkSupport();
+
     const fetchMfaStatus = async () => {
       if (auth.currentUser) {
         const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
@@ -346,8 +355,8 @@ export function Admin() {
                           <Fingerprint size={24} strokeWidth={2.5} />
                         </div>
                         <div>
-                          <h4 className="font-black text-foreground tracking-tight">Biometric Authentication</h4>
-                          <p className="text-xs text-muted-foreground font-bold mt-0.5">Use Face ID or Touch ID for instant 2FA verification.</p>
+                          <h4 className="font-black text-foreground tracking-tight">{biometricMethod} Authentication</h4>
+                          <p className="text-xs text-muted-foreground font-bold mt-0.5">Use your device&#39;s native biometrics for instant verification.</p>
                         </div>
                       </div>
                       <Badge className={cn(
@@ -358,7 +367,7 @@ export function Admin() {
                       </Badge>
                     </div>
 
-                    {passkeyService.isSupported() ? (
+                    {passkeySupported ? (
                       <div className="space-y-4">
                         <Button 
                           onClick={handleRegisterPasskey}
@@ -369,7 +378,7 @@ export function Admin() {
                           {registeringPasskey ? (
                             <><RefreshCw className="animate-spin mr-2" size={18} /> Registering...</>
                           ) : (
-                            <><Fingerprint className="mr-2" size={18} /> Register Face ID / Touch ID</>
+                            <><Fingerprint className="mr-2" size={18} /> Register {biometricMethod}</>
                           )}
                         </Button>
 

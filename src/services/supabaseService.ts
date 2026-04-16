@@ -1,5 +1,8 @@
 import { supabase } from '../lib/supabase';
 import { SupabaseDevice, SupabaseCommand, SupabaseLog } from '../types/supabase';
+import { auth } from '../lib/firebase';
+
+const FLUX_SERVER_URL = (import.meta as any).env?.VITE_FLUX_SERVER_URL || '';
 
 export const supabaseService = {
   // ============== DEVICES ==============
@@ -275,5 +278,67 @@ export const supabaseService = {
       pendingCommands: commandsResult.count || 0,
       criticalLogs: logsResult.count || 0
     };
+  },
+
+  // ============== FLUX INTEGRATION ==============
+
+  // Send command via Flux server
+  sendFluxCommand: async (deviceId: string, action: string, payload: string) => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Not authenticated');
+
+    const response = await fetch(`${FLUX_SERVER_URL}/flux/devices/${deviceId}/command`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': user.uid,
+      },
+      body: JSON.stringify({ action, payload }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to send command');
+    }
+
+    return response.json();
+  },
+
+  // Get command result
+  getFluxCommandResult: async (commandId: string) => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Not authenticated');
+
+    const response = await fetch(`${FLUX_SERVER_URL}/flux/commands/${commandId}`, {
+      headers: {
+        'X-Tenant-ID': user.uid,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to get command result');
+    }
+
+    return response.json();
+  },
+
+  // Get connected devices from Flux
+  getFluxDevices: async () => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Not authenticated');
+
+    const response = await fetch(`${FLUX_SERVER_URL}/flux/devices`, {
+      headers: {
+        'X-Tenant-ID': user.uid,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch Flux devices');
+    }
+
+    return response.json();
   }
 };
