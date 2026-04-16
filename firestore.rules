@@ -143,5 +143,11 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isDocOwner() || isAdmin();
     }
+
+    match /passkeys/{credentialId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isDocOwner() || isAdmin();
+    }
   }
 }

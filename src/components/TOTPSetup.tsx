@@ -12,9 +12,10 @@ import { Shield, Smartphone, RefreshCw } from 'lucide-react';
 interface Props {
   user: any;
   onComplete: () => void;
+  onUsePasskeyInstead?: () => void;
 }
 
-export function TOTPSetup({ user, onComplete }: Props) {
+export function TOTPSetup({ user, onComplete, onUsePasskeyInstead }: Props) {
   const [secret, setSecret] = React.useState<string>('');
   const [otpAuthUrl, setOtpAuthUrl] = React.useState<string>('');
   const [code, setCode] = React.useState('');
@@ -118,6 +119,17 @@ export function TOTPSetup({ user, onComplete }: Props) {
               <Smartphone className="mr-2" size={18} />
               Continue Setup
             </Button>
+
+            {onUsePasskeyInstead && (
+              <div className="pt-2 text-center">
+                <button
+                  onClick={onUsePasskeyInstead}
+                  className="text-[10px] text-primary hover:text-primary/80 transition-colors font-black uppercase tracking-widest"
+                >
+                  Use Biometric instead
+                </button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -11,9 +11,11 @@ import { Shield, RefreshCw } from 'lucide-react';
 interface Props {
   user: any;
   onVerified: () => void;
+  onUseBiometric?: () => void;
+  showBiometricOption?: boolean;
 }
 
-export function TOTPVerify({ user, onVerified }: Props) {
+export function TOTPVerify({ user, onVerified, onUseBiometric, showBiometricOption }: Props) {
   const [code, setCode] = React.useState('');
   const [verifying, setVerifying] = React.useState(false);
 
@@ -97,6 +99,17 @@ export function TOTPVerify({ user, onVerified }: Props) {
           <Button variant="ghost" onClick={handleSignOut} className="w-full text-muted-foreground">
             Sign out
           </Button>
+
+          {showBiometricOption && onUseBiometric && (
+            <div className="pt-2">
+              <button
+                onClick={onUseBiometric}
+                className="w-full text-center text-sm text-primary hover:text-primary/80 transition-colors font-black uppercase tracking-widest"
+              >
+                Use biometric instead
+              </button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

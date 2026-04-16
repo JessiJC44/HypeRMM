@@ -18,6 +18,9 @@ import { AICenter } from './components/AICenter';
 import { AgentDownload } from './components/AgentDownload';
 import { TOTPSetup } from './components/TOTPSetup';
 import { TOTPVerify } from './components/TOTPVerify';
+import { MFAChoice } from './components/MFAChoice';
+import { PasskeySetup } from './components/PasskeySetup';
+import { PasskeyVerify } from './components/PasskeyVerify';
 import { EmailCodeVerify } from './components/EmailCodeVerify';
 import { Toaster } from '@/components/ui/sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -30,7 +33,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
-import { Users, Menu, X, LogOut, Sparkles, Settings, Globe, Check } from 'lucide-react';
+import { Users, Menu, X, LogOut, Sparkles, Settings, Globe, Check, RefreshCw } from 'lucide-react';
 import { AnimatedCharactersLoginPage } from '@/components/ui/animated-characters-login-page';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
@@ -40,6 +43,7 @@ import ThemeSwitch from '@/components/ui/theme-switch';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { passkeyService } from './services/passkeyService';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { EmailVerificationScreen } from './components/EmailVerificationScreen';
@@ -55,6 +59,10 @@ export default function App() {
   const [totpVerified, setTotpVerified] = React.useState(false);
   const [emailCodeVerified, setEmailCodeVerified] = React.useState(false);
   const [userTotpEnabled, setUserTotpEnabled] = React.useState<boolean | null>(null);
+  const [hasPasskey, setHasPasskey] = React.useState(false);
+  const [show2FAMethod, setShow2FAMethod] = React.useState<'passkey' | 'totp' | null>(null);
+  const [mfaSetupMethod, setMfaSetupMethod] = React.useState<'choice' | 'passkey' | 'totp' | null>(null);
+  const [passkeySupported, setPasskeySupported] = React.useState(false);
   const [isDarkMode, setIsDarkMode] = React.useState(false);
   const [needsEmailVerification, setNeedsEmailVerification] = React.useState(false);
   const { language, setLanguage, t } = useLanguage();
@@ -66,6 +74,14 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  React.useEffect(() => {
+    const checkSupport = async () => {
+      const supported = await passkeyService.isSupported();
+      setPasskeySupported(supported);
+    };
+    checkSupport();
+  }, []);
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -81,7 +97,27 @@ export default function App() {
         if (method === 'google') {
           const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
           const userData = userDoc.data();
-          setUserTotpEnabled(userData?.totpEnabled || false);
+          const totpEnabled = userData?.totpEnabled || false;
+          const passkeyEnabled = userData?.passkeyEnabled || false;
+          setUserTotpEnabled(totpEnabled);
+
+          // Check for passkey
+          const userHasPasskey = await passkeyService.hasPasskey(firebaseUser.uid);
+          setHasPasskey(userHasPasskey);
+
+          if (totpEnabled || passkeyEnabled) {
+            if ((passkeyEnabled || userHasPasskey) && passkeyService.isSupported()) {
+              setShow2FAMethod('passkey');
+            } else {
+              setShow2FAMethod('totp');
+            }
+            // Returning user - MUST verify MFA before being marked as verified
+            setIsMfaVerified(false);
+          } else {
+            // New user - needs to set up MFA
+            setMfaSetupMethod('choice');
+            setIsMfaVerified(false);
+          }
         }
         
         // Reset verification states on new login
@@ -117,29 +153,90 @@ export default function App() {
     );
   }
 
-  // Google login flow
-  if (authMethod === 'google') {
-    if (userTotpEnabled === false) {
-      // First time - setup TOTP
+  // Multi-Factor Authentication Flow (Google Auth)
+  if (user && authMethod === 'google' && !isMfaVerified) {
+    // 1. Setup Flow (New users)
+    if (mfaSetupMethod) {
+      if (mfaSetupMethod === 'choice') {
+        return (
+          <>
+            <MFAChoice
+              onChoosePasskey={() => setMfaSetupMethod('passkey')}
+              onChooseTOTP={() => setMfaSetupMethod('totp')}
+              passkeySupported={passkeySupported}
+            />
+            <Toaster position="top-right" />
+          </>
+        );
+      }
+      
+      if (mfaSetupMethod === 'passkey') {
+        return (
+          <>
+            <PasskeySetup
+              user={user}
+              onComplete={() => setIsMfaVerified(true)}
+              onUseTOTPInstead={() => setMfaSetupMethod('totp')}
+            />
+            <Toaster position="top-right" />
+          </>
+        );
+      }
+      
+      if (mfaSetupMethod === 'totp') {
+        return (
+          <>
+            <TOTPSetup 
+              user={user} 
+              onComplete={() => setIsMfaVerified(true)}
+              onUsePasskeyInstead={passkeySupported ? () => setMfaSetupMethod('passkey') : undefined}
+            />
+            <Toaster position="top-right" />
+          </>
+        );
+      }
+    }
+
+    // 2. Verification Flow (Returning users)
+    if (!totpVerified && (userTotpEnabled || hasPasskey)) {
+      if (show2FAMethod === 'passkey') {
+        return (
+          <>
+            <PasskeyVerify
+              user={user}
+              onVerified={() => {
+                setTotpVerified(true);
+                setIsMfaVerified(true);
+              }}
+              onTryAnotherMethod={() => setShow2FAMethod('totp')}
+            />
+            <Toaster position="top-right" />
+          </>
+        );
+      }
+
       return (
         <>
-          <TOTPSetup user={user} onComplete={() => {
-            setUserTotpEnabled(true);
-            setTotpVerified(true);
-          }} />
+          <TOTPVerify 
+            user={user} 
+            onVerified={() => {
+              setTotpVerified(true);
+              setIsMfaVerified(true);
+            }}
+            showBiometricOption={hasPasskey && passkeyService.isSupported()}
+            onUseBiometric={() => setShow2FAMethod('passkey')}
+          />
           <Toaster position="top-right" />
         </>
       );
     }
-    if (userTotpEnabled === true && !totpVerified) {
-      // Returning user - verify TOTP
-      return (
-        <>
-          <TOTPVerify user={user} onVerified={() => setTotpVerified(true)} />
-          <Toaster position="top-right" />
-        </>
-      );
-    }
+
+    // Safety fallback if states are in-between
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <RefreshCw className="animate-spin text-primary" size={32} />
+      </div>
+    );
   }
 
   // Email login flow
@@ -152,6 +249,7 @@ export default function App() {
     );
   }
 
+  // Email verification (secondary check)
   if (needsEmailVerification && user) {
     return (
       <>

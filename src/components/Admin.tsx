@@ -11,8 +11,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import * as OTPAuth from "otpauth";
 import QRCode from "react-qr-code";
+import { Fingerprint } from 'lucide-react';
 import { auth, db } from '@/src/lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { passkeyService } from '../services/passkeyService';
 
 import { firestoreService } from '../services/firestoreService';
 
@@ -32,6 +34,10 @@ export function Admin() {
   const [verificationCode, setVerificationCode] = React.useState('');
   const [isVerifying, setIsVerifying] = React.useState(false);
 
+  // Passkey State
+  const [registeringPasskey, setRegisteringPasskey] = React.useState(false);
+  const [userPasskeys, setUserPasskeys] = React.useState<any[]>([]);
+
   React.useEffect(() => {
     const fetchMfaStatus = async () => {
       if (auth.currentUser) {
@@ -46,6 +52,14 @@ export function Admin() {
       }
     };
     fetchMfaStatus();
+
+    const loadPasskeys = async () => {
+      if (auth.currentUser?.uid) {
+        const passkeys = await passkeyService.getUserPasskeys(auth.currentUser.uid);
+        setUserPasskeys(passkeys);
+      }
+    };
+    loadPasskeys();
 
     if (activeTab === 'users') {
       const unsubscribe = firestoreService.subscribeToUsers((data) => {
@@ -129,6 +143,36 @@ export function Admin() {
       toast.success(`${method} disabled successfully.`);
     } catch (error) {
       toast.error("Failed to disable method.");
+    }
+  };
+
+  const handleRegisterPasskey = async () => {
+    if (!auth.currentUser) return;
+    
+    setRegisteringPasskey(true);
+    try {
+      const success = await passkeyService.registerPasskey(auth.currentUser.uid, auth.currentUser.email!);
+      if (success) {
+        toast.success('Passkey registered! You can now use Face ID / Touch ID for 2FA.');
+        const passkeys = await passkeyService.getUserPasskeys(auth.currentUser.uid);
+        setUserPasskeys(passkeys);
+      } else {
+        toast.error('Failed to register passkey');
+      }
+    } catch (error) {
+      toast.error('Passkey registration cancelled');
+    } finally {
+      setRegisteringPasskey(false);
+    }
+  };
+
+  const handleDeletePasskey = async (credentialId: string) => {
+    try {
+      await passkeyService.deletePasskey(credentialId);
+      setUserPasskeys(prev => prev.filter(p => p.id !== credentialId));
+      toast.success('Passkey removed');
+    } catch {
+      toast.error('Failed to remove passkey');
     }
   };
 
@@ -293,6 +337,83 @@ export function Admin() {
                         </Button>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="pt-4 border-t border-border mt-4">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-5">
+                        <div className="p-4 bg-primary/10 rounded-2xl text-primary shadow-lg shadow-primary/5">
+                          <Fingerprint size={24} strokeWidth={2.5} />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-foreground tracking-tight">Biometric Authentication</h4>
+                          <p className="text-xs text-muted-foreground font-bold mt-0.5">Use Face ID or Touch ID for instant 2FA verification.</p>
+                        </div>
+                      </div>
+                      <Badge className={cn(
+                        "font-black uppercase text-[10px] tracking-widest px-4 py-1.5 rounded-full",
+                        userPasskeys.length > 0 ? "bg-primary/10 text-primary border-none" : "bg-muted text-muted-foreground border-none"
+                      )}>
+                        {userPasskeys.length > 0 ? 'Linked' : 'Not Linked'}
+                      </Badge>
+                    </div>
+
+                    {passkeyService.isSupported() ? (
+                      <div className="space-y-4">
+                        <Button 
+                          onClick={handleRegisterPasskey}
+                          disabled={registeringPasskey}
+                          variant="outline"
+                          className="w-full h-12 rounded-2xl font-black uppercase text-xs tracking-widest border-primary text-primary hover:bg-primary/5 shadow-sm"
+                        >
+                          {registeringPasskey ? (
+                            <><RefreshCw className="animate-spin mr-2" size={18} /> Registering...</>
+                          ) : (
+                            <><Fingerprint className="mr-2" size={18} /> Register Face ID / Touch ID</>
+                          )}
+                        </Button>
+
+                        {userPasskeys.length > 0 && (
+                          <div className="space-y-3 mt-6">
+                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest px-1">Registered Devices</p>
+                            <div className="grid grid-cols-1 gap-3">
+                              {userPasskeys.map(passkey => (
+                                <div key={passkey.id} className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border border-border group hover:border-primary/30 transition-all">
+                                  <div className="flex items-center gap-4">
+                                    <div className="p-2 bg-background rounded-xl border border-border group-hover:bg-primary/5 transition-colors">
+                                      <Smartphone size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-black text-foreground">{passkey.deviceName}</p>
+                                      <p className="text-[10px] text-muted-foreground/80 font-bold uppercase tracking-widest">
+                                        Added on {new Date(passkey.createdAt).toLocaleDateString()}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => handleDeletePasskey(passkey.id)}
+                                    className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl h-8 px-3 font-bold text-[10px] uppercase tracking-widest"
+                                  >
+                                    Remove
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-6 bg-muted/20 border border-dashed border-border rounded-2xl text-center">
+                        <p className="text-sm font-bold text-muted-foreground italic">
+                          Biometric authentication is not supported on this browser or device.
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-2 uppercase tracking-wide">
+                          Try Safari on macOS/iOS or Chrome on a device with biometric sensors.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

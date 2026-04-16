@@ -1,5 +1,11 @@
 {
   "name": "HypeRemote",
   "description": "A comprehensive RMM platform featuring ticketing, asset monitoring, and remote assistance integration.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation",
+    "publickey-credentials-get",
+    "publickey-credentials-create"
+  ]
 }
