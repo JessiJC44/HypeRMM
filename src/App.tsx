@@ -16,6 +16,7 @@ import { ReferFriend } from './components/ReferFriend';
 import { Admin } from './components/Admin';
 import { AICenter } from './components/AICenter';
 import { AgentDownload } from './components/AgentDownload';
+import { Scripts } from './components/Scripts';
 import { TOTPSetup } from './components/TOTPSetup';
 import { TOTPVerify } from './components/TOTPVerify';
 import { MFAChoice } from './components/MFAChoice';
@@ -334,6 +335,8 @@ export default function App() {
         return <AICenter />;
       case 'admin':
         return <Admin />;
+      case 'scripts':
+        return <Scripts />;
       case 'patches':
         return <PatchManagement />;
       case 'software':

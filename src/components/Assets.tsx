@@ -75,6 +75,7 @@ import { AgentConsole } from './AgentConsole';
 import { firestoreService } from '../services/firestoreService';
 
 import { auth } from '../lib/firebase';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const AppleIcon = ({ size = 16, className = "" }: { size?: number; className?: string }) => (
   <svg 
@@ -89,6 +90,7 @@ const AppleIcon = ({ size = 16, className = "" }: { size?: number; className?: s
 );
 
 export function Devices() {
+  const { t } = useLanguage();
   const [devices, setDevices] = React.useState<Device[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -162,16 +164,6 @@ export function Devices() {
       case 'mobile': return <Smartphone size={16} />;
       default: return <Monitor size={16} />;
     }
-  };
-
-  const handleRemoteConnect = (device: Device) => {
-    const fluxId = device.flux_id || device.fluxId;
-    if (!fluxId) {
-      toast.error('Accès à distance non disponible. Flux n\'est pas installé sur cet appareil.');
-      return;
-    }
-    window.open(`rustdesk://connect/${fluxId}`, '_blank');
-    toast.info(`Ouverture de la connexion à distance vers ${device.name}...`);
   };
 
   if (selectedDevice) {
@@ -407,16 +399,26 @@ export function Devices() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center">
-                      <Button 
-                        variant="default" 
-                        size="sm" 
-                        className="h-8 px-3 gap-2 text-xs font-bold"
-                        onClick={() => handleRemoteConnect(device)}
-                        disabled={!device.flux_id && !device.fluxId}
-                      >
-                        <Monitor size={14} />
-                        Connect
-                      </Button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 px-3 gap-2 text-[10px] font-bold text-slate-400 bg-slate-50 cursor-not-allowed"
+                                disabled
+                              >
+                                <Monitor size={14} />
+                                {t('agent.remote_coming_soon')}
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{t('agent.remote_coming_soon_tooltip')}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   </TableCell>
                   <TableCell>

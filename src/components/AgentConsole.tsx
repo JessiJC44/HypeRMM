@@ -36,17 +36,19 @@ import {
   XAxis, 
   YAxis, 
   CartesianGrid, 
-  Tooltip, 
+  Tooltip as RechartsTooltip, 
   ResponsiveContainer,
   AreaChart,
   Area
 } from 'recharts';
 import { cn } from '@/lib/utils';
-import { Device } from '@/src/types';
+import { Device, Command, DeviceLog } from '@/src/types';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
 import { auth } from '../lib/firebase';
+import { useLanguage } from '../contexts/LanguageContext';
+import { firestoreService } from '../services/firestoreService';
 
 const AppleIcon = ({ size = 16, className = "" }: { size?: number; className?: string }) => (
   <svg 
@@ -59,6 +61,13 @@ const AppleIcon = ({ size = 16, className = "" }: { size?: number; className?: s
     <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.1 2.48-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.24-1.99 1.1-3.15-1.04.04-2.3.69-3.05 1.56-.67.77-1.26 1.97-1.1 3.1 1.16.09 2.32-.68 3.05-1.51z"/>
   </svg>
 );
+
+import { 
+  Tooltip, 
+  TooltipContent, 
+  TooltipProvider, 
+  TooltipTrigger 
+} from '@/components/ui/tooltip';
 
 interface AgentConsoleProps {
   device: Device;
@@ -76,23 +85,26 @@ const performanceData = [
 ];
 
 export function AgentConsole({ device, onBack }: AgentConsoleProps) {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = React.useState('overview');
   const [isToolOpen, setIsToolOpen] = React.useState<string | null>(null);
   const [isConnecting, setIsConnecting] = React.useState(false);
+  const [commands, setCommands] = React.useState<Command[]>([]);
+  const [logs, setLogs] = React.useState<DeviceLog[]>([]);
+  const [selectedCommand, setSelectedCommand] = React.useState<Command | null>(null);
 
-  const handleConnect = () => {
-    const fluxId = device.flux_id || device.fluxId;
-    if (!fluxId) {
-      toast.error('Remote access not available. Flux is not installed on this device.');
-      return;
-    }
-    setIsConnecting(true);
-    window.open(`rustdesk://connect/${fluxId}`, '_blank');
-    toast.info(`Opening remote connection to ${device.name}...`);
-    setTimeout(() => {
-      setIsConnecting(false);
-    }, 2000);
-  };
+  React.useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const unsubCommands = firestoreService.subscribeToCommandsByDevice(user.uid, device.id, setCommands);
+    const unsubLogs = firestoreService.subscribeToDeviceLogsByDevice(user.uid, device.id, setLogs);
+
+    return () => {
+      unsubCommands();
+      unsubLogs();
+    };
+  }, [device.id]);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Monitor },
@@ -141,14 +153,24 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
             <RefreshCw size={16} className="text-blue-500" />
             Restart
           </Button>
-          <Button 
-            onClick={handleConnect}
-            disabled={isConnecting}
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-full h-9 px-6 font-bold gap-2 shadow-lg shadow-blue-100"
-          >
-            {isConnecting ? <RefreshCw size={16} className="animate-spin" /> : <Zap size={16} />}
-            {isConnecting ? 'Connecting...' : 'Connect'}
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button 
+                    disabled
+                    className="bg-slate-200 text-slate-500 cursor-not-allowed rounded-full h-9 px-6 font-bold gap-2"
+                  >
+                    <Zap size={16} />
+                    {t('agent.remote_coming_soon')}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{t('agent.remote_coming_soon_tooltip')}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
@@ -275,6 +297,70 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
             )}
           </AnimatePresence>
 
+          {/* Command Result Dialog */}
+          <AnimatePresence>
+            {selectedCommand && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]"
+                >
+                  <div className="bg-slate-50 border-b px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "p-2 rounded-lg",
+                        selectedCommand.status === 'completed' ? "bg-emerald-50 text-emerald-600" : 
+                        selectedCommand.status === 'failed' ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600"
+                      )}>
+                        <Terminal size={20} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-800 uppercase tracking-tight">Command Result: {selectedCommand.commandType.replace('_', ' ')}</h3>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                          {selectedCommand.status} • {selectedCommand.createdAt?.seconds ? new Date(selectedCommand.createdAt.seconds * 1000).toLocaleString() : 'Just now'}
+                        </p>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => setSelectedCommand(null)} className="rounded-full hover:bg-slate-200">
+                      <XCircle size={20} className="text-slate-400" />
+                    </Button>
+                  </div>
+                  
+                  <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50">
+                    <div className="space-y-4">
+                      {selectedCommand.payload && (
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Input Payload</p>
+                          <pre className="p-4 bg-slate-900 text-slate-300 rounded-xl text-xs font-mono overflow-x-auto border border-slate-800">
+                            {selectedCommand.payload}
+                          </pre>
+                        </div>
+                      )}
+                      
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Console Output</p>
+                        <pre className={cn(
+                          "p-4 rounded-xl text-xs font-mono overflow-x-auto border min-h-[100px]",
+                          selectedCommand.status === 'failed' ? "bg-rose-900/10 text-rose-700 border-rose-200" : "bg-slate-900 text-emerald-400 border-slate-800"
+                        )}>
+                          {selectedCommand.result || (selectedCommand.status === 'pending' || selectedCommand.status === 'running' ? 'Command is still processing...' : 'No output returned.')}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-6 bg-white border-t flex justify-end">
+                    <Button onClick={() => setSelectedCommand(null)} className="rounded-full px-8 bg-slate-900 hover:bg-slate-800 font-bold">
+                      Close
+                    </Button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
           <AnimatePresence mode="wait">
             {activeTab === 'overview' && (
               <motion.div 
@@ -295,10 +381,13 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
                         <Badge variant="secondary" className="bg-blue-50 text-blue-600 border-none text-[10px]">Normal</Badge>
                       </div>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">CPU Usage</p>
-                      <h3 className="text-2xl font-bold text-slate-800 mt-1">24%</h3>
+                      <h3 className="text-2xl font-bold text-slate-800 mt-1">
+                        {device.cpu ? 'Active' : 'N/A'}
+                      </h3>
                       <div className="w-full bg-slate-100 h-1.5 rounded-full mt-4 overflow-hidden">
-                        <div className="bg-blue-500 h-full rounded-full" style={{ width: '24%' }} />
+                        <div className="bg-blue-500 h-full rounded-full" style={{ width: device.cpu ? '24%' : '0%' }} />
                       </div>
+                      <p className="text-[10px] text-slate-400 mt-2 truncate font-medium">{device.cpu || 'Waiting for data...'}</p>
                     </CardContent>
                   </Card>
 
@@ -311,10 +400,15 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
                         <Badge variant="secondary" className="bg-purple-50 text-purple-600 border-none text-[10px]">Stable</Badge>
                       </div>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Memory</p>
-                      <h3 className="text-2xl font-bold text-slate-800 mt-1">8.4 GB</h3>
+                      <h3 className="text-2xl font-bold text-slate-800 mt-1">
+                        {device.ramTotal ? `${(device.ramTotal / (1024*1024*1024)).toFixed(1)} GB` : 'N/A'}
+                      </h3>
                       <div className="w-full bg-slate-100 h-1.5 rounded-full mt-4 overflow-hidden">
-                        <div className="bg-purple-500 h-full rounded-full" style={{ width: '52%' }} />
+                        <div className="bg-purple-500 h-full rounded-full" style={{ width: device.ramTotal ? `${(device.ramUsed! / device.ramTotal!) * 100}%` : '0%' }} />
                       </div>
+                      <p className="text-[10px] text-slate-400 mt-2 font-medium">
+                        {device.ramUsed ? `${(device.ramUsed / (1024*1024*1024)).toFixed(1)} GB used` : 'No RAM data'}
+                      </p>
                     </CardContent>
                   </Card>
 
@@ -326,11 +420,16 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
                         </div>
                         <Badge variant="secondary" className="bg-amber-50 text-amber-600 border-none text-[10px]">Healthy</Badge>
                       </div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disk Free</p>
-                      <h3 className="text-2xl font-bold text-slate-800 mt-1">142 GB</h3>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disk Total</p>
+                      <h3 className="text-2xl font-bold text-slate-800 mt-1">
+                        {device.diskTotal ? `${(device.diskTotal / (1024*1024*1024)).toFixed(0)} GB` : 'N/A'}
+                      </h3>
                       <div className="w-full bg-slate-100 h-1.5 rounded-full mt-4 overflow-hidden">
-                        <div className="bg-amber-500 h-full rounded-full" style={{ width: '68%' }} />
+                        <div className="bg-amber-500 h-full rounded-full" style={{ width: device.diskTotal ? `${(device.diskUsed! / device.diskTotal!) * 100}%` : '0%' }} />
                       </div>
+                      <p className="text-[10px] text-slate-400 mt-2 font-medium">
+                        {device.diskUsed ? `${((device.diskTotal! - device.diskUsed!) / (1024*1024*1024)).toFixed(0)} GB free` : 'No disk data'}
+                      </p>
                     </CardContent>
                   </Card>
 
@@ -342,9 +441,13 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
                         </div>
                         <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 border-none text-[10px]">Active</Badge>
                       </div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Uptime</p>
-                      <h3 className="text-2xl font-bold text-slate-800 mt-1">12d 4h</h3>
-                      <p className="text-[10px] text-slate-400 mt-4 font-medium">Last boot: Oct 12, 2023</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Last Seen</p>
+                      <h3 className="text-2xl font-bold text-slate-800 mt-1">
+                        {device.status === 'online' ? 'Just now' : 'Yesterday'}
+                      </h3>
+                      <p className="text-[10px] text-slate-400 mt-4 font-medium truncate">
+                        {device.lastSeen ? new Date(device.lastSeen).toLocaleString() : 'Never'}
+                      </p>
                     </CardContent>
                   </Card>
                 </div>
@@ -394,7 +497,7 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
                           tickLine={false} 
                           tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}
                         />
-                        <Tooltip 
+                        <RechartsTooltip 
                           contentStyle={{ 
                             backgroundColor: '#fff', 
                             border: 'none',
@@ -460,32 +563,38 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
                     </h3>
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                       <div className="divide-y divide-slate-50">
-                        {[
-                          { action: 'Remote Connection', user: 'Admin', time: '2 hours ago', status: 'Success' },
-                          { action: 'Patch Installation', user: 'System', time: '5 hours ago', status: 'Success' },
-                          { action: 'Software Update', user: 'Admin', time: 'Yesterday', status: 'Success' },
-                          { action: 'Script Execution', user: 'System', time: '2 days ago', status: 'Failed' },
-                          { action: 'Agent Restart', user: 'System', time: '3 days ago', status: 'Success' },
-                        ].map((activity, i) => (
-                          <div key={i} className="p-4 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className={cn(
-                                "w-2 h-2 rounded-full",
-                                activity.status === 'Success' ? "bg-emerald-500" : "bg-rose-500"
-                              )} />
-                              <div>
-                                <p className="text-sm font-bold text-slate-700">{activity.action}</p>
-                                <p className="text-[10px] text-slate-400 font-medium">By {activity.user} • {activity.time}</p>
+                        {commands.length === 0 ? (
+                          <div className="p-8 text-center text-slate-400 font-medium">No recent activity detected.</div>
+                        ) : (
+                          commands.slice(0, 5).map((cmd) => (
+                            <div 
+                              key={cmd.id} 
+                              className="p-4 flex items-center justify-between hover:bg-slate-50/50 transition-colors cursor-pointer"
+                              onClick={() => setSelectedCommand(cmd)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  "w-2 h-2 rounded-full",
+                                  cmd.status === 'completed' ? "bg-emerald-500" : 
+                                  cmd.status === 'failed' ? "bg-rose-500" : "bg-blue-500"
+                                )} />
+                                <div>
+                                  <p className="text-sm font-bold text-slate-700 uppercase tracking-tight">{cmd.commandType.replace('_', ' ')}</p>
+                                  <p className="text-[10px] text-slate-400 font-medium">
+                                    {cmd.createdAt?.seconds ? new Date(cmd.createdAt.seconds * 1000).toLocaleString() : 'Just now'}
+                                  </p>
+                                </div>
                               </div>
+                              <Badge variant="outline" className={cn(
+                                "text-[10px] font-bold border-none",
+                                cmd.status === 'completed' ? "bg-emerald-50 text-emerald-600" : 
+                                cmd.status === 'failed' ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600"
+                              )}>
+                                {cmd.status}
+                              </Badge>
                             </div>
-                            <Badge variant="outline" className={cn(
-                              "text-[10px] font-bold border-none",
-                              activity.status === 'Success' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-                            )}>
-                              {activity.status}
-                            </Badge>
-                          </div>
-                        ))}
+                          ))
+                        )}
                       </div>
                     </div>
                   </div>
@@ -551,43 +660,149 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-xl font-bold text-slate-800">Automation Scripts</h3>
-                    <p className="text-sm text-slate-500 font-medium mt-1">Run scripts and automation profiles on this device</p>
+                    <h3 className="text-xl font-bold text-slate-800">Script Execution History</h3>
+                    <p className="text-sm text-slate-500 font-medium mt-1">Review recently executed automation on this device</p>
                   </div>
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-full font-bold gap-2">
+                  <Button 
+                    className="bg-blue-600 hover:bg-blue-700 text-white rounded-full font-bold gap-2"
+                    onClick={() => setActiveTab('overview')} // Or link to a script runner
+                  >
                     <Plus size={16} />
-                    Run Script
+                    Run New Script
                   </Button>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4">
-                  {[
-                    { name: 'Clear Temp Files', category: 'Maintenance', lastRun: '2 days ago', status: 'Success' },
-                    { name: 'Update Windows Defender', category: 'Security', lastRun: '5 hours ago', status: 'Success' },
-                    { name: 'Restart Spooler Service', category: 'Troubleshooting', lastRun: 'Never', status: 'Pending' },
-                    { name: 'Inventory Scan', category: 'Audit', lastRun: 'Yesterday', status: 'Success' },
-                  ].map((script) => (
-                    <div key={script.name} className="bg-white p-5 rounded-2xl border border-slate-100 flex items-center justify-between hover:shadow-md transition-all group">
-                      <div className="flex items-center gap-4">
-                        <div className="p-3 bg-slate-50 rounded-xl text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                          <Terminal size={20} />
+                  {commands.filter(c => c.commandType === 'run_script').length === 0 ? (
+                    <div className="p-12 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+                      <Terminal size={40} className="mx-auto text-slate-200 mb-4" />
+                      <p className="text-slate-400 font-bold">No scripts have been executed on this device yet.</p>
+                      <p className="text-xs text-slate-400 mt-1">Use the Scripts tab in the main navigation to deploy automation.</p>
+                    </div>
+                  ) : (
+                    commands.filter(c => c.commandType === 'run_script').map((cmd) => (
+                      <div 
+                        key={cmd.id} 
+                        className="bg-white p-5 rounded-2xl border border-slate-100 flex items-center justify-between hover:shadow-md transition-all group cursor-pointer"
+                        onClick={() => setSelectedCommand(cmd)}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-slate-50 rounded-xl text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                            <Terminal size={20} />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-800 truncate max-w-[300px]">
+                              {cmd.payload?.substring(0, 50) || 'Unnamed Script'}...
+                            </h4>
+                            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">
+                              {cmd.createdAt?.seconds ? new Date(cmd.createdAt.seconds * 1000).toLocaleString() : 'Just now'}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="font-bold text-slate-800">{script.name}</h4>
-                          <p className="text-xs text-slate-500 font-medium">{script.category} • Last run: {script.lastRun}</p>
+                        <div className="flex items-center gap-3">
+                          <Badge variant="secondary" className={cn(
+                            "text-[10px] font-bold border-none",
+                            cmd.status === 'completed' ? "bg-emerald-50 text-emerald-600" : 
+                            cmd.status === 'failed' ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600"
+                          )}>
+                            {cmd.status}
+                          </Badge>
+                          <Button variant="outline" size="sm" className="rounded-full font-bold h-8 border-slate-200">View Output</Button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Badge variant="secondary" className={cn(
-                          "text-[10px] font-bold border-none",
-                          script.status === 'Success' ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"
-                        )}>
-                          {script.status}
-                        </Badge>
-                        <Button variant="outline" size="sm" className="rounded-full font-bold h-8 border-slate-200">Run Now</Button>
+                    ))
+                  )}
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'hardware' && (
+              <motion.div 
+                key="hardware"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-6"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-slate-800">Hardware Specifications</h3>
+                  <Badge variant="outline" className="font-bold border-slate-200">Real-time Data</Badge>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="bg-slate-50 px-6 py-4 border-b flex items-center gap-2">
+                      <Cpu size={18} className="text-blue-500" />
+                      <h4 className="font-bold text-slate-700">Processor & RAM</h4>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                      <div className="p-4 flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">CPU Model</span>
+                        <span className="text-sm font-bold text-slate-700">{device.cpu || 'Generic x64 Processor'}</span>
+                      </div>
+                      <div className="p-4 flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total RAM</span>
+                        <span className="text-sm font-bold text-slate-700">
+                          {device.ramTotal ? `${(device.ramTotal / (1024*1024*1024)).toFixed(1)} GB` : '8.0 GB (Est)'}
+                        </span>
+                      </div>
+                      <div className="p-4 flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Available RAM</span>
+                        <span className="text-sm font-bold text-slate-700">
+                          {device.ramTotal && device.ramUsed ? `${((device.ramTotal - device.ramUsed) / (1024*1024*1024)).toFixed(1)} GB` : 'N/A'}
+                        </span>
                       </div>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="bg-slate-50 px-6 py-4 border-b flex items-center gap-2">
+                      <HardDrive size={18} className="text-amber-500" />
+                      <h4 className="font-bold text-slate-700">Storage Information</h4>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                      <div className="p-4 flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disk Capacity</span>
+                        <span className="text-sm font-bold text-slate-700">
+                          {device.diskTotal ? `${(device.diskTotal / (1024*1024*1024)).toFixed(0)} GB` : '256 GB (Est)'}
+                        </span>
+                      </div>
+                      <div className="p-4 flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disk Used</span>
+                        <span className="text-sm font-bold text-slate-700">
+                          {device.diskUsed ? `${(device.diskUsed / (1024*1024*1024)).toFixed(0)} GB` : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="p-4 flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Health Status</span>
+                        <Badge className="bg-emerald-50 text-emerald-600 border-none font-bold text-[10px]">Healthy</Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="bg-slate-50 px-6 py-4 border-b flex items-center gap-2">
+                      <Monitor size={18} className="text-purple-500" />
+                      <h4 className="font-bold text-slate-700">Operating System</h4>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                      <div className="p-4 flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">OS Name</span>
+                        <span className="text-sm font-bold text-slate-700 text-right">{device.os}</span>
+                      </div>
+                      <div className="p-4 flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">OS Family</span>
+                        <span className="text-sm font-bold text-slate-700">
+                          {device.os.toLowerCase().includes('windows') ? 'Windows' : 
+                           device.os.toLowerCase().includes('darwin') || device.os.toLowerCase().includes('mac') ? 'macOS' : 'Linux'}
+                        </span>
+                      </div>
+                      <div className="p-4 flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Agent Version</span>
+                        <span className="text-sm font-bold text-slate-700">{device.agentVersion || '1.0.0'}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             )}

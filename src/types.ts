@@ -26,8 +26,14 @@ export interface Device {
   status: DeviceStatus;
   lastSeen: string;
   customer?: string;
+  cpu?: string;
+  ramTotal?: number;
+  ramUsed?: number;
+  diskTotal?: number;
+  diskUsed?: number;
+  agentVersion?: string;
+  /** Flux (MeshCentral) device ID — populated when device is enrolled in Flux. */
   fluxId?: string;
-  flux_id?: string;
   createdAt?: string;
 }
 
@@ -53,7 +59,7 @@ export interface Command {
   id: string;
   userId: string;
   deviceId: string;
-  commandType: 'ping' | 'restart' | 'shutdown' | 'run_script' | 'get_info' | 'install_flux' | 'scan_patches' | 'install_patch';
+  commandType: 'ping' | 'restart' | 'shutdown' | 'run_script' | 'get_info' | 'scan_patches' | 'install_patch';
   payload: string | null;
   status: 'pending' | 'running' | 'completed' | 'failed';
   result: string | null;

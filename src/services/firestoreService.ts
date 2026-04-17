@@ -349,7 +349,7 @@ export const firestoreService = {
     const idToken = await auth.currentUser?.getIdToken();
     if (!idToken) throw new Error('Not authenticated');
 
-    const res = await fetch(`/api/flux/devices/${deviceId}/command`, {
+    const res = await fetch(`/api/agent/devices/${deviceId}/command`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -369,7 +369,7 @@ export const firestoreService = {
     const idToken = await auth.currentUser?.getIdToken();
     if (!idToken) throw new Error('Not authenticated');
 
-    const res = await fetch(`/api/flux/devices/${deviceId}/delete`, {
+    const res = await fetch(`/api/agent/devices/${deviceId}/delete`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${idToken}`
@@ -387,7 +387,7 @@ export const firestoreService = {
     const idToken = await auth.currentUser?.getIdToken();
     if (!idToken) throw new Error('Not authenticated');
 
-    const res = await fetch('/api/flux/agent-enrollment-token', {
+    const res = await fetch('/api/agent/enrollment-token', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${idToken}`

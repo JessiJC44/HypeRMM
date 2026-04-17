@@ -12,6 +12,13 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { auth } from '../lib/firebase';
+import { useLanguage } from '../contexts/LanguageContext';
+import { 
+  Tooltip, 
+  TooltipContent, 
+  TooltipProvider, 
+  TooltipTrigger 
+} from '@/components/ui/tooltip';
 import { firestoreService } from '../services/firestoreService';
 import { Device, Command, DeviceLog } from '../types';
 import { toast } from 'sonner';
@@ -30,6 +37,7 @@ const AppleIcon = ({ size = 16, className = "" }: { size?: number; className?: s
 );
 
 export function RMMDashboard() {
+  const { t } = useLanguage();
   const [devices, setDevices] = React.useState<Device[]>([]);
   const [commands, setCommands] = React.useState<Command[]>([]);
   const [logs, setLogs] = React.useState<DeviceLog[]>([]);
@@ -124,16 +132,6 @@ export function RMMDashboard() {
       toast.error('Failed to delete device (Admin required)');
       console.error(error);
     }
-  };
-
-  const handleFluxConnect = (fluxId: string) => {
-    if (!fluxId) {
-      toast.error('Remote access not available. Flux is not installed on this device.');
-      return;
-    }
-    // Open Flux/RustDesk with the device ID
-    window.open(`rustdesk://connect/${fluxId}`, '_blank');
-    toast.info('Opening remote connection...');
   };
 
   if (loading) {
@@ -261,20 +259,26 @@ export function RMMDashboard() {
                     <Badge variant={device.status === 'online' ? 'default' : 'secondary'}>
                       {device.status}
                     </Badge>
-                    {(device.flux_id || device.fluxId) && (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="gap-1 h-8"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFluxConnect(device.flux_id || device.fluxId || '');
-                        }}
-                      >
-                        <Monitor size={14} />
-                        Connect
-                      </Button>
-                    )}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 h-8 text-[10px] text-slate-400 bg-slate-50 cursor-not-allowed"
+                              disabled
+                            >
+                              <Monitor size={14} />
+                              {t('agent.remote_coming_soon')}
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{t('agent.remote_coming_soon_tooltip')}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     <Button 
                       variant="ghost" 
                       size="icon" 

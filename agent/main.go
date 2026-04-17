@@ -35,7 +35,6 @@ type Device struct {
 	IPAddress    string `json:"ip_address"`
 	PublicIP     string `json:"public_ip"`
 	Status       string `json:"status"`
-	FluxID       string `json:"flux_id"`
 	CPU          string `json:"cpu"`
 	RAMTotal     int64  `json:"ram_total"`
 	RAMUsed      int64  `json:"ram_used"`
@@ -184,9 +183,6 @@ func getSystemInfo() Device {
 		cpuName = cpuInfo[0].ModelName
 	}
 
-	// Get Flux ID if installed
-	fluxID := getFluxID()
-
 	return Device{
 		Name:         hostInfo.Hostname,
 		Hostname:     hostInfo.Hostname,
@@ -194,7 +190,6 @@ func getSystemInfo() Device {
 		IPAddress:    localIP,
 		PublicIP:     publicIP,
 		Status:       "online",
-		FluxID:       fluxID,
 		CPU:          cpuName,
 		RAMTotal:     int64(memInfo.Total),
 		RAMUsed:      int64(memInfo.Used),
@@ -213,24 +208,6 @@ func getPublicIP() string {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	return string(body)
-}
-
-func getFluxID() string {
-	var configFile string
-	switch runtime.GOOS {
-	case "windows":
-		configFile = os.Getenv("AppData") + "\\Flux\\config\\id"
-	case "darwin":
-		configFile = os.Getenv("HOME") + "/Library/Application Support/Flux/config/id"
-	default:
-		configFile = os.Getenv("HOME") + "/.config/flux/id"
-	}
-
-	data, err := os.ReadFile(configFile)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(data))
 }
 
 func heartbeatLoop() {
@@ -331,8 +308,6 @@ func executeCommand(cmd Command) {
 		info := getSystemInfo()
 		infoBytes, _ := json.MarshalIndent(info, "", "  ")
 		result = string(infoBytes)
-	case "install_flux":
-		result, err = installFlux()
 	default:
 		result = "Unknown command: " + cmd.CommandType
 	}
@@ -429,63 +404,36 @@ func executeShutdown() (string, error) {
 	return "Shutdown initiated", nil
 }
 
-func executeScript(script string) (string, error) {
+func executeScript(payload string) (string, error) {
+	var scriptContent string
+	
+	// Try to parse as JSON with variables
+	var data struct {
+		Content   string            `json:"content"`
+		Variables map[string]string `json:"variables"`
+	}
+	
+	err := json.Unmarshal([]byte(payload), &data)
+	if err == nil && data.Content != "" {
+		scriptContent = data.Content
+		// Perform variable substitution: replace {key} with value
+		for k, v := range data.Variables {
+			placeholder := "{" + k + "}"
+			scriptContent = strings.ReplaceAll(scriptContent, placeholder, v)
+		}
+	} else {
+		// Fallback to raw script content if not JSON
+		scriptContent = payload
+	}
+
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("powershell", "-Command", script)
+		cmd = exec.Command("powershell", "-Command", scriptContent)
 	default:
-		cmd = exec.Command("bash", "-c", script)
+		cmd = exec.Command("bash", "-c", scriptContent)
 	}
 
 	output, err := cmd.CombinedOutput()
 	return string(output), err
-}
-
-func installFlux() (string, error) {
-	log.Println("Installing Flux (RustDesk)...")
-
-	var downloadURL string
-	var installCmd *exec.Cmd
-
-	switch runtime.GOOS {
-	case "windows":
-		downloadURL = "https://github.com/rustdesk/rustdesk/releases/download/1.2.3/rustdesk-1.2.3-x86_64.exe"
-		// Download and run installer
-		installCmd = exec.Command("powershell", "-Command", fmt.Sprintf(`
-			$url = "%s"
-			$output = "$env:TEMP\flux-installer.exe"
-			Invoke-WebRequest -Uri $url -OutFile $output
-			Start-Process -FilePath $output -ArgumentList "--silent-install" -Wait
-		`, downloadURL))
-	case "darwin":
-		downloadURL = "https://github.com/rustdesk/rustdesk/releases/download/1.2.3/rustdesk-1.2.3.dmg"
-		installCmd = exec.Command("bash", "-c", fmt.Sprintf(`
-			curl -L -o /tmp/flux.dmg "%s"
-			hdiutil attach /tmp/flux.dmg
-			cp -R "/Volumes/RustDesk/RustDesk.app" /Applications/Flux.app
-			hdiutil detach "/Volumes/RustDesk"
-		`, downloadURL))
-	default:
-		downloadURL = "https://github.com/rustdesk/rustdesk/releases/download/1.2.3/rustdesk-1.2.3-x86_64.deb"
-		installCmd = exec.Command("bash", "-c", fmt.Sprintf(`
-			curl -L -o /tmp/flux.deb "%s"
-			sudo dpkg -i /tmp/flux.deb || sudo apt-get install -f -y
-		`, downloadURL))
-	}
-
-	output, err := installCmd.CombinedOutput()
-	if err != nil {
-		return string(output), err
-	}
-
-	// Update flux_id in config
-	time.Sleep(2 * time.Second) // Wait for installation
-	config.FluxID = getFluxID()
-	saveConfig()
-
-	// Update device in Supabase with flux_id
-	sendHeartbeat()
-
-	return "Flux installed successfully. ID: " + config.FluxID, nil
 }

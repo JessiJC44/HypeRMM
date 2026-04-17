@@ -68,18 +68,8 @@ async function requireAdmin(req: any, res: any, next: any) {
   }
 }
 
-// Flux state
-interface ConnectedDevice {
-  device_id: string;
-  tenant_id: string;
-  hostname: string;
-  os: string;
-  status: "online" | "offline";
-  last_seen: string;
-  ws: WebSocket;
-}
-
-const connectedDevices = new Map<string, ConnectedDevice>();
+// Agent state
+const connectedAgents = new Map<string, { lastSeen: Date }>();
 
 async function startServer() {
   const app = express();
@@ -91,7 +81,7 @@ async function startServer() {
   // === Agent API ===
 
   // Generate enrollment token (Admins only)
-  app.get("/api/flux/agent-enrollment-token", verifyFirebaseToken, requireAdmin, async (req: any, res) => {
+  app.get("/api/agent/enrollment-token", verifyFirebaseToken, requireAdmin, async (req: any, res) => {
     try {
       const token = crypto.randomBytes(32).toString("hex");
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
@@ -172,8 +162,9 @@ async function startServer() {
   app.get("/api/agent/download/linux", (req, res) => res.redirect(`${AGENT_RELEASES_BASE}/hyperemote-agent-linux`));
   app.get("/api/agent/download/mac", (req, res) => res.redirect(`${AGENT_RELEASES_BASE}/hyperemote-agent-mac-arm`)); // Default to arm, or could check user agent
 
-  // Alias for backward compatibility if any
+  // Alias for backward compatibility
   app.post("/api/flux/agent-enroll", (req, res) => res.redirect(307, "/api/agent/enroll"));
+  app.get("/api/flux/agent-enrollment-token", (req, res) => res.redirect(307, "/api/agent/enrollment-token"));
 
   // Agent heartbeats
   app.post("/api/agent/heartbeat", verifyAgentJWT, async (req: any, res) => {
@@ -191,6 +182,7 @@ async function startServer() {
         ramUsed: ramUsed || metrics?.ram_used,
         diskTotal: diskTotal || metrics?.disk_total,
         diskUsed: diskUsed || metrics?.disk_used,
+        // Reserved for MeshCentral/Flux integration (see Étape 6)
         fluxId: fluxId || metrics?.flux_id,
         agentVersion: agentVersion || metrics?.agent_version,
         lastSeen: FieldValue.serverTimestamp(),
@@ -244,6 +236,17 @@ async function startServer() {
         completedAt: FieldValue.serverTimestamp()
       });
 
+      // Update script run if applicable
+      const scriptRunId = commandDoc.data()?.scriptRunId;
+      if (scriptRunId) {
+        await firestore.collection("script_runs").doc(scriptRunId).update({
+          status: status === "completed" ? "success" : "failed",
+          output: result || "",
+          exitCode: status === "completed" ? 0 : 1, // Basic assumption, agent could send real exit code
+          completedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
       // Log the result
       await firestore.collection("device_logs").add({
         userId: tenantId,
@@ -286,20 +289,260 @@ async function startServer() {
     }
   });
 
-  // === Flux REST API ===
+  // === Scripts API ===
 
-  app.get("/api/health", (req, res) => {
-    res.json({ 
-      status: "ok",
-      flux: {
-        connected_devices: connectedDevices.size,
-        uptime: process.uptime()
-      }
-    });
+  app.get("/api/scripts", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      const { category, targetOs } = req.query;
+      
+      let q: any = firestore.collection("scripts").where("userId", "==", uid);
+      
+      if (category) q = q.where("category", "==", category);
+      if (targetOs) q = q.where("targetOs", "array-contains", targetOs);
+      
+      const snapshot = await q.orderBy("name", "asc").get();
+      const scripts = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      res.json(scripts);
+    } catch (error) {
+      console.error("❌ Fetch scripts error:", error);
+      res.status(500).json({ error: "Failed to fetch scripts" });
+    }
   });
 
+  app.post("/api/scripts", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      const scriptData = req.body;
+      
+      const scriptRef = firestore.collection("scripts").doc();
+      await scriptRef.set({
+        ...scriptData,
+        userId: uid,
+        runCount: 0,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      
+      res.json({ id: scriptRef.id, status: "created" });
+    } catch (error) {
+      console.error("❌ Create script error:", error);
+      res.status(500).json({ error: "Failed to create script" });
+    }
+  });
+
+  app.get("/api/scripts/shared", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { category, targetOs } = req.query;
+      let q: any = firestore.collection("shared_scripts");
+      
+      if (category) q = q.where("category", "==", category);
+      if (targetOs) q = q.where("targetOs", "array-contains", targetOs);
+      
+      const snapshot = await q.get();
+      const scripts = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      res.json(scripts);
+    } catch (error) {
+      console.error("❌ Fetch shared scripts error:", error);
+      res.status(500).json({ error: "Failed to fetch shared scripts" });
+    }
+  });
+
+  app.post("/api/scripts/shared/:id/clone", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { uid } = req.user;
+      
+      const sharedDoc = await firestore.collection("shared_scripts").doc(id).get();
+      if (!sharedDoc.exists) return res.status(404).json({ error: "Shared script not found" });
+      
+      const scriptData = sharedDoc.data()!;
+      delete scriptData.userId; // Ensure we don't copy the original owner if any
+      
+      const scriptRef = firestore.collection("scripts").doc();
+      await scriptRef.set({
+        ...scriptData,
+        userId: uid,
+        runCount: 0,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      
+      res.json({ id: scriptRef.id, status: "cloned" });
+    } catch (error) {
+      console.error("❌ Clone script error:", error);
+      res.status(500).json({ error: "Failed to clone script" });
+    }
+  });
+
+  app.post("/api/scripts/:id/run", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { uid } = req.user;
+      const { deviceIds, variableValues } = req.body;
+      
+      const scriptDoc = await firestore.collection("scripts").doc(id).get();
+      if (!scriptDoc.exists || scriptDoc.data()!.userId !== uid) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const script = scriptDoc.data()!;
+      const runIds: string[] = [];
+      
+      for (const deviceId of deviceIds) {
+        const runRef = firestore.collection("script_runs").doc();
+        const runId = runRef.id;
+        runIds.push(runId);
+        
+        await runRef.set({
+          userId: uid,
+          scriptId: id,
+          deviceId,
+          variableValues: variableValues || {},
+          status: "pending",
+          startedAt: FieldValue.serverTimestamp(),
+        });
+        
+        // Create command for agent
+        const commandId = `script_${runId}`;
+        await firestore.collection("commands").doc(commandId).set({
+          userId: uid,
+          deviceId,
+          commandType: "run_script",
+          payload: JSON.stringify({
+            content: script.content,
+            variables: variableValues || {}
+          }),
+          status: "pending",
+          scriptRunId: runId,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+      
+      await scriptDoc.ref.update({
+        runCount: FieldValue.increment(deviceIds.length),
+        lastRunAt: FieldValue.serverTimestamp()
+      });
+      
+      res.json({ runIds });
+    } catch (error) {
+      console.error("❌ Run script error:", error);
+      res.status(500).json({ error: "Failed to run script" });
+    }
+  });
+
+  app.get("/api/scripts/runs", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      const snapshot = await firestore.collection("script_runs")
+        .where("userId", "==", uid)
+        .orderBy("startedAt", "desc")
+        .limit(50)
+        .get();
+        
+      const runs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      res.json(runs);
+    } catch (error) {
+      console.error("❌ Fetch script runs error:", error);
+      res.status(500).json({ error: "Failed to fetch script runs" });
+    }
+  });
+
+  app.post("/api/scripts/ai-generate", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { description, language, targetOs } = req.body;
+      
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(500).json({ error: "Gemini API key not configured" });
+      }
+      
+      const genAI = new (await import("@google/genai")).GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "missing" });
+      const response = await genAI.models.generateContent({ 
+        model: "gemini-3-flash-preview",
+        contents: description,
+        config: {
+          systemInstruction: `You are an expert IT administrator. Generate a ${language} script for ${targetOs} that does: ${description}. Return ONLY the script code, no explanations, no markdown code blocks. The script must be safe, idempotent if possible, and include basic error handling. Use variables like {variable_name} for values that should be configurable.`
+        }
+      });
+      
+      let text = response.text || "";
+      
+      // Clean up common markdown if model ignored the instruction
+      text = text.replace(/^```[a-z]*\n/i, "").replace(/\n```$/i, "");
+      
+      res.json({ content: text });
+    } catch (error) {
+      console.error("❌ AI script generation error:", error);
+      res.status(500).json({ error: "Failed to generate AI script" });
+    }
+  });
+
+  app.get("/api/scripts/:id", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { uid } = req.user;
+      
+      const scriptDoc = await firestore.collection("scripts").doc(id).get();
+      if (!scriptDoc.exists || scriptDoc.data()!.userId !== uid) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      res.json({ id: scriptDoc.id, ...scriptDoc.data() });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch script" });
+    }
+  });
+
+  app.patch("/api/scripts/:id", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { uid } = req.user;
+      const updates = req.body;
+      
+      const scriptRef = firestore.collection("scripts").doc(id);
+      const scriptDoc = await scriptRef.get();
+      
+      if (!scriptDoc.exists || scriptDoc.data()!.userId !== uid) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      await scriptRef.update({
+        ...updates,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      
+      res.json({ status: "updated" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update script" });
+    }
+  });
+
+  app.delete("/api/scripts/:id", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { uid } = req.user;
+      
+      const scriptRef = firestore.collection("scripts").doc(id);
+      const scriptDoc = await scriptRef.get();
+      
+      if (!scriptDoc.exists || scriptDoc.data()!.userId !== uid) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      await scriptRef.delete();
+      res.json({ status: "deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete script" });
+    }
+  });
+
+  // Update script run status when command completes
+  // (This needs integration into the existing command result endpoint)
+
+  // === Agent Management API (Browser) ===
+
   // Send command to device (Browser)
-  app.post("/api/flux/devices/:deviceId/command", verifyFirebaseToken, async (req: any, res) => {
+  app.post("/api/agent/devices/:deviceId/command", verifyFirebaseToken, async (req: any, res) => {
     try {
       const { deviceId } = req.params;
       const { action, payload } = req.body;
@@ -316,22 +559,10 @@ async function startServer() {
         userId: uid,
         deviceId,
         commandType: action,
-        payload: payload || null,
+        payload: typeof payload === "string" ? payload : JSON.stringify(payload) || null,
         status: "pending",
         createdAt: FieldValue.serverTimestamp(),
       });
-
-      // If device is connected via WebSocket, notify it
-      const connected = connectedDevices.get(deviceId);
-      if (connected) {
-        connected.ws.send(JSON.stringify({
-          type: "command",
-          command_id: commandId,
-          action,
-          payload,
-        }));
-        await firestore.collection("commands").doc(commandId).update({ status: "running" });
-      }
 
       res.json({ command_id: commandId, status: "sent" });
     } catch (error) {
@@ -341,7 +572,7 @@ async function startServer() {
   });
 
   // Get command result (Browser)
-  app.get("/api/flux/commands/:id", verifyFirebaseToken, async (req: any, res) => {
+  app.get("/api/agent/commands/:id", verifyFirebaseToken, async (req: any, res) => {
     try {
       const { id } = req.params;
       const { uid } = req.user;
@@ -357,7 +588,7 @@ async function startServer() {
   });
 
   // Delete device (Browser - Admin only)
-  app.post("/api/flux/devices/:deviceId/delete", verifyFirebaseToken, requireAdmin, async (req: any, res) => {
+  app.post("/api/agent/devices/:deviceId/delete", verifyFirebaseToken, requireAdmin, async (req: any, res) => {
     try {
       const { deviceId } = req.params;
       
@@ -377,7 +608,17 @@ async function startServer() {
     }
   });
 
+  // === Health & WebSocket API ===
+
+  app.get("/api/health", (req, res) => {
+    res.json({ 
+      status: "ok",
+      uptime: process.uptime()
+    });
+  });
+
   // === WebSocket Server ===
+  // Currently unused for agents (they use long polling API), but keep for future real-time features
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (request, socket, head) => {
@@ -387,114 +628,12 @@ async function startServer() {
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit("connection", ws, request);
       });
-    } else {
-      // Vite handles its own HMR websockets, but we can ignore them if they are handled by vite middleware
-      // In this environment HMR is often disabled or handled via the proxy, but vite.middlewares handles it.
-      // If we don't handle it, it will be destroyed. Let's see if Vite needs it.
     }
   });
 
   wss.on("connection", (ws: WebSocket, req) => {
-    const tenantId = req.headers["x-tenant-id"] as string;
-    const deviceId = req.headers["x-device-id"] as string;
-
-    if (!tenantId || !deviceId) {
-      console.log("🔌 Rejected connection: missing headers");
-      ws.close(1008, "Missing Headers");
-      return;
-    }
-
-    console.log(`🔌 New connection: ${deviceId} (tenant: ${tenantId})`);
-
-    ws.on("message", async (data) => {
-      try {
-        const message = JSON.parse(data.toString());
-        await handleFluxMessage(ws, message, tenantId, deviceId);
-      } catch (err) {
-        console.error("❌ Message parse error:", err);
-      }
-    });
-
-    ws.on("close", async () => {
-      console.log(`🔌 Disconnected: ${deviceId}`);
-      connectedDevices.delete(deviceId);
-      
-      try {
-        await firestore.collection("devices").doc(deviceId).update({
-          status: "offline",
-          lastSeen: FieldValue.serverTimestamp()
-        });
-      } catch (e) {
-        // Device might have been deleted from Firestore already
-      }
-    });
+    ws.close(1000, "WebSocket communication not yet implemented for standard agents");
   });
-
-  async function handleFluxMessage(ws: WebSocket, message: any, tenantId: string, deviceId: string) {
-    switch (message.type) {
-      case "register":
-        const device: ConnectedDevice = {
-          device_id: deviceId,
-          tenant_id: tenantId,
-          hostname: message.hostname,
-          os: message.os,
-          status: "online",
-          last_seen: new Date().toISOString(),
-          ws,
-        };
-        connectedDevices.set(deviceId, device);
-
-        await firestore.collection("devices").doc(deviceId).set({
-          id: deviceId,
-          userId: tenantId,
-          name: message.hostname,
-          hostname: message.hostname,
-          os: message.os,
-          status: "online",
-          lastSeen: FieldValue.serverTimestamp(),
-          fluxId: deviceId,
-          agentVersion: message.version || "1.0.0",
-        }, { merge: true });
-
-        console.log(`✅ Device registered: ${message.hostname} (${deviceId})`);
-        ws.send(JSON.stringify({ type: "registered", device_id: deviceId }));
-        break;
-
-      case "heartbeat":
-        const connected = connectedDevices.get(deviceId);
-        if (connected) connected.last_seen = new Date().toISOString();
-
-        await firestore.collection("devices").doc(deviceId).update({
-          status: "online",
-          lastSeen: FieldValue.serverTimestamp(),
-          cpu: message.cpu?.toString() || "N/A",
-          ramUsed: message.ram,
-          diskUsed: message.disk_used,
-          diskTotal: message.disk_total,
-        });
-        break;
-
-      case "result":
-        console.log(`📥 Result for command ${message.command_id}: ${message.status}`);
-        const status = message.status === "success" ? "completed" : "failed";
-        
-        await firestore.collection("commands").doc(message.command_id).update({
-          status: status,
-          result: message.output,
-          completedAt: FieldValue.serverTimestamp()
-        });
-
-        await firestore.collection("device_logs").add({
-          deviceId: deviceId,
-          userId: tenantId,
-          level: message.status === "success" ? "info" : "error",
-          message: `Command result: ${message.output.substring(0, 200)}`,
-          source: "command",
-          createdAt: FieldValue.serverTimestamp(),
-        });
-        break;
-    }
-  }
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

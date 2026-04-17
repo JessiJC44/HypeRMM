@@ -144,6 +144,56 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["tokenHash", "userId", "used", "expiresAt"]
+    },
+    "Script": {
+      "title": "Script",
+      "description": "A reusable PowerShell, Bash, or Python script with variables.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner of the script (null for shared scripts)" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "language": { "type": "string", "enum": ["powershell", "bash", "python"] },
+        "fileExtension": { "type": "string" },
+        "content": { "type": "string" },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "defaultValue": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "targetOs": { "type": "array", "items": { "type": "string", "enum": ["windows", "mac", "linux"] } },
+        "aiCopilotEnabled": { "type": "boolean" },
+        "isTemplate": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "lastRunAt": { "type": "string", "format": "date-time" },
+        "runCount": { "type": "number" }
+      },
+      "required": ["name", "language", "content"]
+    },
+    "ScriptRun": {
+      "title": "ScriptRun",
+      "description": "A log of a script execution on a device.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "scriptId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "variableValues": { "type": "object" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "running", "success", "failed", "timeout"] },
+        "output": { "type": "string" },
+        "exitCode": { "type": "number" }
+      },
+      "required": ["userId", "scriptId", "deviceId", "status", "startedAt"]
     }
   },
   "firestore": {
@@ -186,6 +236,18 @@
     "/agent_enrollment_tokens/{tokenId}": {
       "schema": "AgentEnrollmentToken",
       "description": "Secure enrollment tokens"
+    },
+    "/scripts/{scriptId}": {
+      "schema": "Script",
+      "description": "User script library"
+    },
+    "/script_runs/{runId}": {
+      "schema": "ScriptRun",
+      "description": "History of script executions"
+    },
+    "/shared_scripts/{scriptId}": {
+      "schema": "Script",
+      "description": "Community shared script library (Read Only for non-admins)"
     }
   }
 }

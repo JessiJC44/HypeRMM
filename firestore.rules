@@ -114,6 +114,21 @@ service cloud.firestore {
     match /agent_enrollment_tokens/{tokenId} {
       allow read, write: if false; // Backend only
     }
+
+    match /scripts/{scriptId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create, update, delete: if false; // Server only
+    }
+
+    match /script_runs/{runId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create, update, delete: if false; // Server only
+    }
+
+    match /shared_scripts/{scriptId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
     
     // Legacy mapping if needed for older migrations
     match /agent_enrollments/{tokenHash} {
