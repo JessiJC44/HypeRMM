@@ -10,10 +10,11 @@ import {
   orderBy,
   where,
   getDocs,
-  limit
+  limit,
+  getCountFromServer
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Ticket, Device, Alert } from '../types';
+import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase';
+import { Ticket, Device, Alert, Command, DeviceLog } from '../types';
 
 export const firestoreService = {
   // Tickets
@@ -81,16 +82,82 @@ export const firestoreService = {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'devices'));
   },
 
-  addDevice: async (userId: string, device: Omit<Device, 'id' | 'lastSeen' | 'userId'>) => {
-    try {
-      await addDoc(collection(db, 'devices'), {
-        ...device,
-        userId,
-        lastSeen: serverTimestamp()
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'devices');
-    }
+  subscribeToDeviceById: (userId: string, deviceId: string, callback: (device: Device | null) => void) => {
+    return onSnapshot(doc(db, 'devices', deviceId), (snapshot) => {
+      if (snapshot.exists() && snapshot.data().userId === userId) {
+        callback({ id: snapshot.id, ...snapshot.data() } as Device);
+      } else {
+        callback(null);
+      }
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'devices'));
+  },
+
+  // Commands
+  subscribeToCommands: (userId: string, callback: (commands: Command[]) => void) => {
+    const q = query(
+      collection(db, 'commands'), 
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
+    return onSnapshot(q, (snapshot) => {
+      const commands = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Command[];
+      callback(commands);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'commands'));
+  },
+
+  subscribeToCommandsByDevice: (userId: string, deviceId: string, callback: (commands: Command[]) => void) => {
+    const q = query(
+      collection(db, 'commands'), 
+      where('deviceId', '==', deviceId),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc'),
+      limit(20)
+    );
+    return onSnapshot(q, (snapshot) => {
+      const commands = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Command[];
+      callback(commands);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'commands'));
+  },
+
+  // Logs
+  subscribeToDeviceLogs: (userId: string, callback: (logs: DeviceLog[]) => void, logLimit: number = 100) => {
+    const q = query(
+      collection(db, 'device_logs'), 
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc'),
+      limit(logLimit)
+    );
+    return onSnapshot(q, (snapshot) => {
+      const logs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as DeviceLog[];
+      callback(logs);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'device_logs'));
+  },
+
+  subscribeToDeviceLogsByDevice: (userId: string, deviceId: string, callback: (logs: DeviceLog[]) => void, logLimit: number = 50) => {
+    const q = query(
+      collection(db, 'device_logs'), 
+      where('deviceId', '==', deviceId),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc'),
+      limit(logLimit)
+    );
+    return onSnapshot(q, (snapshot) => {
+      const logs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as DeviceLog[];
+      callback(logs);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'device_logs'));
   },
 
   // Alerts
@@ -253,30 +320,85 @@ export const firestoreService = {
   // Stats for Dashboard
   getDashboardStats: async (userId: string) => {
     try {
-      const [ticketsSnap, devicesSnap, alertsSnap] = await Promise.all([
-        getDocs(query(
-          collection(db, 'tickets'), 
-          where('userId', '==', userId),
-          where('status', '==', 'open')
-        )),
-        getDocs(query(
-          collection(db, 'devices'),
-          where('userId', '==', userId)
-        )),
-        getDocs(query(
-          collection(db, 'alerts'),
-          where('userId', '==', userId)
-        ))
+      const ticketsQ = query(collection(db, 'tickets'), where('userId', '==', userId), where('status', '==', 'open'));
+      const devicesQ = query(collection(db, 'devices'), where('userId', '==', userId));
+      const alertsQ = query(collection(db, 'alerts'), where('userId', '==', userId));
+      const pendingCommandsQ = query(collection(db, 'commands'), where('userId', '==', userId), where('status', '==', 'pending'));
+
+      const [ticketsSnap, devicesSnap, alertsSnap, commandsSnap] = await Promise.all([
+        getCountFromServer(ticketsQ),
+        getCountFromServer(devicesQ),
+        getCountFromServer(alertsQ),
+        getCountFromServer(pendingCommandsQ)
       ]);
 
       return {
-        openTickets: ticketsSnap.size,
-        managedDevices: devicesSnap.size,
-        activeAlerts: alertsSnap.size,
-        slaCompliance: "98.2%" // Mocked for now or calculated
+        openTickets: ticketsSnap.data().count,
+        managedDevices: devicesSnap.data().count,
+        activeAlerts: alertsSnap.data().count,
+        pendingCommands: commandsSnap.data().count,
+        slaCompliance: "98.2%" // Mocked for now
       };
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'stats');
+      handleFirestoreError(error, OperationType.LIST, 'stats');
     }
+  },
+
+  // API Bridge Methods
+  sendCommand: async (deviceId: string, action: string, payload?: any) => {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) throw new Error('Not authenticated');
+
+    const res = await fetch(`/api/flux/devices/${deviceId}/command`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
+      body: JSON.stringify({ action, payload })
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to send command');
+    }
+    return res.json();
+  },
+
+  deleteDevice: async (deviceId: string) => {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) throw new Error('Not authenticated');
+
+    const res = await fetch(`/api/flux/devices/${deviceId}/delete`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${idToken}`
+      }
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to delete device');
+    }
+    return res.json();
+  },
+
+  getEnrollmentToken: async () => {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) throw new Error('Not authenticated');
+
+    const res = await fetch('/api/flux/agent-enrollment-token', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${idToken}`
+      }
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to generate enrollment token');
+    }
+    const data = await res.json();
+    return data.enrollment_token;
   }
 };

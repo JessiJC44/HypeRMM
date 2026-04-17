@@ -7,10 +7,11 @@ import { motion } from 'motion/react';
 interface Props {
   onChoosePasskey: () => void;
   onChooseTOTP: () => void;
+  onBack: () => void;
   passkeySupported: boolean;
 }
 
-export function MFAChoice({ onChoosePasskey, onChooseTOTP, passkeySupported }: Props) {
+export function MFAChoice({ onChoosePasskey, onChooseTOTP, onBack, passkeySupported }: Props) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 animate-in fade-in duration-500">
       <Card className="w-full max-w-md border-border shadow-2xl rounded-3xl overflow-hidden bg-card">
@@ -67,10 +68,20 @@ export function MFAChoice({ onChoosePasskey, onChooseTOTP, passkeySupported }: P
           </motion.div>
 
           {!passkeySupported && (
-            <p className="text-[10px] text-center text-muted-foreground mt-4 font-black uppercase tracking-widest bg-muted/30 py-2 rounded-lg italic font-sans antialiased">
-              Passkey (Face ID / Touch ID) is not available on this device
+            <p className="text-[10px] text-center text-rose-500 mt-4 font-black uppercase tracking-widest bg-rose-500/10 py-3 px-4 rounded-lg italic font-sans antialiased border border-rose-500/20">
+              Face ID / Touch ID is not enabled on this device or browser. Check System Settings → Touch ID & Password, or use another 2FA method.
             </p>
           )}
+
+          <div className="pt-4">
+            <Button
+              variant="ghost"
+              onClick={onBack}
+              className="w-full text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+            >
+              Back to Login
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

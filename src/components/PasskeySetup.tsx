@@ -13,9 +13,10 @@ interface Props {
   user: any;
   onComplete: () => void;
   onUseTOTPInstead: () => void;
+  onBack: () => void;
 }
 
-export function PasskeySetup({ user, onComplete, onUseTOTPInstead }: Props) {
+export function PasskeySetup({ user, onComplete, onUseTOTPInstead, onBack }: Props) {
   const [registering, setRegistering] = React.useState(false);
   const [success, setSuccess] = React.useState(false);
   const biometricMethod = getBiometricMethod();
@@ -45,14 +46,20 @@ export function PasskeySetup({ user, onComplete, onUseTOTPInstead }: Props) {
           toast.info('Registration cancelled. You can try again anytime.');
           break;
         case 'NotSupportedError':
-          toast.warning(`Biometric authentication is not supported on this device.`);
+          toast.warning(`Face ID / Touch ID is not enabled on this device or browser. Check System Settings → Touch ID & Password, or use another 2FA method.`);
           onUseTOTPInstead();
           break;
         case 'SecurityError':
-          toast.error('Passkeys are blocked by browser settings or this platform. Please use an Authenticator App instead.', {
-            duration: 5000,
-          });
-          setTimeout(() => onUseTOTPInstead(), 3000);
+          if (errorMessage.includes('feature is not enabled') || errorMessage.includes('Permissions Policy')) {
+            toast.error('Passkeys are blocked by browser security policies in this preview. Please open the app in a new tab to register your passkey.', {
+              duration: 8000,
+            });
+          } else {
+            toast.error('Passkeys are blocked by browser settings or this platform. Please use an Authenticator App instead.', {
+              duration: 5000,
+            });
+            setTimeout(() => onUseTOTPInstead(), 3000);
+          }
           break;
         case 'InvalidStateError':
           toast.info('A passkey is already registered for this account.');
@@ -128,13 +135,29 @@ export function PasskeySetup({ user, onComplete, onUseTOTPInstead }: Props) {
               <><Fingerprint className="mr-3" size={22} /> Register with {biometricMethod}</>
             )}
           </Button>
+
+          <div className="pt-2 flex flex-col gap-3">
+            <Button
+              variant="outline"
+              onClick={() => window.open(window.location.href, '_blank')}
+              className="w-full h-11 rounded-xl border-dashed border-primary/40 hover:border-primary text-xs font-bold uppercase tracking-widest text-primary/80"
+            >
+              Open in New Tab (Fixes Security Errors)
+            </Button>
+          </div>
           
-          <div className="pt-2">
+            <div className="pt-4 flex flex-col gap-4">
             <button
               onClick={onUseTOTPInstead}
               className="text-[10px] text-primary hover:text-primary/80 transition-colors font-black uppercase tracking-widest"
             >
               Use Google Authenticator instead
+            </button>
+            <button
+              onClick={onBack}
+              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors font-black uppercase tracking-widest"
+            >
+              Back to choice
             </button>
           </div>
         </CardContent>

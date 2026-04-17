@@ -96,6 +96,7 @@ export function Devices() {
   const [selectedDevice, setSelectedDevice] = React.useState<Device | null>(null);
   const [installStep, setInstallStep] = React.useState(1);
   const [installMode, setInstallMode] = React.useState<'download' | 'command' | 'link'>('download');
+  const [enrollmentToken, setEnrollmentToken] = React.useState('');
   const [newDevice, setNewDevice] = React.useState({
     name: '',
     type: 'workstation' as const,
@@ -132,14 +133,14 @@ export function Devices() {
       const user = auth.currentUser;
       if (!user) throw new Error('Not authenticated');
 
-      await firestoreService.addDevice(user.uid, {
-        ...newDevice,
-        type: newDevice.type as any,
-        status: 'offline'
-      });
+      // Generate a one-time enrollment token from the backend
+      const token = await firestoreService.getEnrollmentToken();
+      setEnrollmentToken(token);
+      
       setInstallStep(5);
+      toast.success("Enrollment token generated!");
     } catch (error) {
-      toast.error("Failed to register agent");
+      toast.error("Failed to prepare agent setup: " + (error instanceof Error ? error.message : "Generation failed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -662,17 +663,16 @@ export function Devices() {
                   {installMode === 'command' && (
                     <div className="space-y-3">
                       <div className="relative group">
-                        <pre className="bg-slate-950 text-primary p-4 rounded-xl font-mono text-[11px] whitespace-pre-wrap break-all border border-border">
+                        <pre className="bg-slate-950 text-emerald-400 p-4 rounded-xl font-mono text-[11px] whitespace-pre-wrap break-all border border-border">
                           {(() => {
-                            const userId = auth.currentUser?.uid || 'YOUR_USER_ID';
-                            const baseUrl = 'https://github.com/JessiJC44/HypeRMM/releases/latest/download';
+                            const baseUrl = window.location.origin;
+                            const token = enrollmentToken || '••••••••••••••••••••••••••••••••';
                             if (newDevice.os === 'Windows') {
-                              return `powershell -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri '${baseUrl}/hyperemote-agent-windows.exe' -OutFile agent.exe; .\\agent.exe '${userId}' '${newDevice.name || '$env:COMPUTERNAME'}'}"`;
+                              return `curl -sSL ${baseUrl}/api/agent/download/windows -o agent.exe && .\\agent.exe --enroll "${baseUrl}" "${token}"`;
                             } else if (newDevice.os === 'Linux') {
-                              return `curl -sSL ${baseUrl}/hyperemote-agent-linux -o agent && chmod +x agent && ./agent "${userId}" "${newDevice.name || '$(hostname)'}"`;
+                              return `curl -sSL ${baseUrl}/api/agent/download/linux -o agent && chmod +x agent && ./agent --enroll "${baseUrl}" "${token}"`;
                             } else {
-                              const arch = newDevice.arch === 'M series (ARM)' ? 'arm' : 'intel';
-                              return `curl -sSL ${baseUrl}/hyperemote-agent-mac-${arch} -o agent && chmod +x agent && ./agent "${userId}" "${newDevice.name || '$(hostname)'}"`;
+                              return `curl -sSL ${baseUrl}/api/agent/download/mac -o agent && chmod +x agent && ./agent --enroll "${baseUrl}" "${token}"`;
                             }
                           })()}
                         </pre>
@@ -682,20 +682,18 @@ export function Devices() {
                             size="icon" 
                             className="h-8 w-8 rounded-lg bg-white/10 text-white hover:bg-white/20"
                             onClick={() => {
-                              const userId = auth.currentUser?.uid || 'YOUR_USER_ID';
-                              const baseUrl = 'https://github.com/JessiJC44/HypeRMM/releases/latest/download';
+                              const baseUrl = window.location.origin;
+                              const token = enrollmentToken || '';
                               let cmd = '';
                               if (newDevice.os === 'Windows') {
-                                cmd = `powershell -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri '${baseUrl}/hyperemote-agent-windows.exe' -OutFile agent.exe; .\\agent.exe '${userId}' '${newDevice.name || '$env:COMPUTERNAME'}'}"`;
+                                cmd = `curl -sSL ${baseUrl}/api/agent/download/windows -o agent.exe && .\\agent.exe --enroll "${baseUrl}" "${token}"`;
                               } else if (newDevice.os === 'Linux') {
-                                cmd = `curl -sSL ${baseUrl}/hyperemote-agent-linux -o agent && chmod +x agent && ./agent "${userId}" "${newDevice.name || '$(hostname)'}"`;
+                                cmd = `curl -sSL ${baseUrl}/api/agent/download/linux -o agent && chmod +x agent && ./agent --enroll "${baseUrl}" "${token}"`;
                               } else {
-                                const arch = newDevice.arch === 'M series (ARM)' ? 'arm' : 'intel';
-                                cmd = `curl -sSL ${baseUrl}/hyperemote-agent-mac-${arch} -o agent && chmod +x agent && ./agent "${userId}" "${newDevice.name || '$(hostname)'}"`;
+                                cmd = `curl -sSL ${baseUrl}/api/agent/download/mac -o agent && chmod +x agent && ./agent --enroll "${baseUrl}" "${token}"`;
                               }
                               navigator.clipboard.writeText(cmd);
                               toast.success("Commande copiée !");
-                              handleAddAgent(null as any);
                             }}
                           >
                             <Plus size={14} />
@@ -705,24 +703,22 @@ export function Devices() {
                       <div className="flex justify-end">
                         <Button 
                           onClick={() => {
-                            const userId = auth.currentUser?.uid || 'YOUR_USER_ID';
-                            const baseUrl = 'https://github.com/JessiJC44/HypeRMM/releases/latest/download';
+                            const baseUrl = window.location.origin;
+                            const token = enrollmentToken || '';
                             let cmd = '';
                             if (newDevice.os === 'Windows') {
-                              cmd = `powershell -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri '${baseUrl}/hyperemote-agent-windows.exe' -OutFile agent.exe; .\\agent.exe '${userId}' '${newDevice.name || '$env:COMPUTERNAME'}'}"`;
+                              cmd = `curl -sSL ${baseUrl}/api/agent/download/windows -o agent.exe && .\\agent.exe --enroll "${baseUrl}" "${token}"`;
                             } else if (newDevice.os === 'Linux') {
-                              cmd = `curl -sSL ${baseUrl}/hyperemote-agent-linux -o agent && chmod +x agent && ./agent "${userId}" "${newDevice.name || '$(hostname)'}"`;
+                              cmd = `curl -sSL ${baseUrl}/api/agent/download/linux -o agent && chmod +x agent && ./agent --enroll "${baseUrl}" "${token}"`;
                             } else {
-                              const arch = newDevice.arch === 'M series (ARM)' ? 'arm' : 'intel';
-                              cmd = `curl -sSL ${baseUrl}/hyperemote-agent-mac-${arch} -o agent && chmod +x agent && ./agent "${userId}" "${newDevice.name || '$(hostname)'}"`;
+                              cmd = `curl -sSL ${baseUrl}/api/agent/download/mac -o agent && chmod +x agent && ./agent --enroll "${baseUrl}" "${token}"`;
                             }
                             navigator.clipboard.writeText(cmd);
                             toast.success("Commande copiée !");
-                            handleAddAgent(null as any);
                           }}
                           className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-black uppercase text-[10px] tracking-widest h-10 px-6"
                         >
-                          Copier
+                          Copier la commande
                         </Button>
                       </div>
                     </div>
@@ -731,13 +727,13 @@ export function Devices() {
                   {installMode === 'link' && (
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex-1 bg-card border border-border rounded-xl px-4 py-2 text-xs font-mono text-muted-foreground break-all">
-                        https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-windows.exe
+                        {`${window.location.origin}/api/agent/download/${newDevice.os.toLowerCase()}`}
                       </div>
                       <Button 
                         onClick={() => {
-                          navigator.clipboard.writeText('https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-windows.exe');
+                          const url = `${window.location.origin}/api/agent/download/${newDevice.os.toLowerCase()}`;
+                          navigator.clipboard.writeText(url);
                           toast.success("Lien copié !");
-                          handleAddAgent(null as any);
                         }}
                         className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-black uppercase text-[10px] tracking-widest h-10 px-6 shrink-0"
                       >

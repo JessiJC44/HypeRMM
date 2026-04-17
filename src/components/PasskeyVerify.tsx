@@ -10,9 +10,10 @@ interface Props {
   user: any;
   onVerified: () => void;
   onTryAnotherMethod: () => void;
+  onSignOut: () => void;
 }
 
-export function PasskeyVerify({ user, onVerified, onTryAnotherMethod }: Props) {
+export function PasskeyVerify({ user, onVerified, onTryAnotherMethod, onSignOut }: Props) {
   const [verifying, setVerifying] = React.useState(false);
   const biometricMethod = getBiometricMethod();
 
@@ -36,14 +37,20 @@ export function PasskeyVerify({ user, onVerified, onTryAnotherMethod }: Props) {
           toast.info('Verification cancelled.');
           break;
         case 'NotSupportedError':
-          toast.warning(`Biometric authentication is not available on this device.`);
+          toast.warning(`Face ID / Touch ID is not enabled on this device or browser. Check System Settings → Touch ID & Password, or use another 2FA method.`);
           onTryAnotherMethod();
           break;
         case 'SecurityError':
-          toast.error('Passkey verification is blocked by browser security policies. Please use an Authenticator App instead.', {
-            duration: 5000,
-          });
-          setTimeout(() => onTryAnotherMethod(), 3000);
+          if (errorMessage.includes('feature is not enabled') || errorMessage.includes('Permissions Policy')) {
+            toast.error('Passkeys are blocked by browser security policies in this preview. Please open the app in a new tab to verify your identity.', {
+              duration: 8000,
+            });
+          } else {
+            toast.error('Passkey verification is blocked by browser security policies. Please use an Authenticator App instead.', {
+              duration: 5000,
+            });
+            setTimeout(() => onTryAnotherMethod(), 3000);
+          }
           break;
         default:
           if (errorMessage.includes('Permissions Policy') || errorMessage.includes('feature is not enabled')) {
@@ -92,13 +99,29 @@ export function PasskeyVerify({ user, onVerified, onTryAnotherMethod }: Props) {
               <><Fingerprint className="mr-3" size={22} /> Verify with {biometricMethod}</>
             )}
           </Button>
+
+          <div className="pt-2 flex flex-col gap-3">
+            <Button
+              variant="outline"
+              onClick={() => window.open(window.location.href, '_blank')}
+              className="w-full h-11 rounded-xl border-dashed border-primary/40 hover:border-primary text-xs font-bold uppercase tracking-widest text-primary/80"
+            >
+              Open in New Tab (Fixes Security Errors)
+            </Button>
+          </div>
           
-          <div className="pt-2">
+          <div className="pt-4 flex flex-col gap-4">
             <button
               onClick={onTryAnotherMethod}
-              className="text-[10px] text-primary hover:text-primary/80 transition-colors font-black uppercase tracking-widest"
+              className="text-[10px] text-primary hover:text-primary/80 transition-colors font-black uppercase tracking-widest bg-primary/5 py-3 rounded-lg border border-primary/20"
             >
               Use Authenticator App instead
+            </button>
+            <button
+              onClick={onSignOut}
+              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors font-black uppercase tracking-widest"
+            >
+              Sign out
             </button>
           </div>
         </CardContent>

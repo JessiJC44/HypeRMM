@@ -104,9 +104,9 @@ export function TOTPVerify({ user, onVerified, onUseBiometric, showBiometricOpti
             <div className="pt-2">
               <button
                 onClick={onUseBiometric}
-                className="w-full text-center text-sm text-primary hover:text-primary/80 transition-colors font-black uppercase tracking-widest"
+                className="w-full text-center text-[10px] text-primary hover:text-primary/80 transition-colors font-black uppercase tracking-widest bg-primary/5 py-3 rounded-lg border border-primary/20"
               >
-                Use biometric instead
+                Use Face ID / Touch ID instead
               </button>
             </div>
           )}

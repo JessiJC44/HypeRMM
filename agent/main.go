@@ -21,10 +21,8 @@ import (
 )
 
 const (
-	VERSION       = "1.0.0"
-	SUPABASE_URL  = "https://vyrnbsybajwmishy.supabase.co"
-	SUPABASE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5cm5ic3liYWp3cWFqd21pc2h5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjE5NjExMywiZXhwIjoyMDkxNzcyMTEzfQ.dHoa0z7D5VmYbXlQpoICbp_2mcT5laUgj0BQVu4RR8M"
-	HEARTBEAT_INTERVAL = 30 * time.Second
+	VERSION               = "1.0.0"
+	HEARTBEAT_INTERVAL    = 30 * time.Second
 	COMMAND_POLL_INTERVAL = 5 * time.Second
 )
 
@@ -58,9 +56,10 @@ type Command struct {
 }
 
 type Config struct {
-	DeviceID string `json:"device_id"`
-	UserID   string `json:"user_id"`
-	FluxID   string `json:"flux_id"`
+	DeviceID  string `json:"device_id"`
+	FluxID    string `json:"flux_id"`
+	AgentJWT  string `json:"agent_jwt"`
+	ServerURL string `json:"server_url"`
 }
 
 var config Config
@@ -77,20 +76,23 @@ func main() {
 		configPath = "/etc/hyperemote/config.json"
 	}
 
-	// Load or create config
+	// Load existing config
 	loadConfig()
 
-	// If no user_id, wait for registration via command line args
-	if config.UserID == "" {
-		if len(os.Args) < 2 {
-			log.Fatal("Usage: hyperemote-agent <user_id> [device_name]")
+	// Handle CLI arguments
+	if len(os.Args) > 1 {
+		if os.Args[1] == "--enroll" {
+			if len(os.Args) < 4 {
+				log.Fatal("Usage: hyperemote-agent --enroll <server_url> <token>")
+			}
+			enrollDevice(os.Args[2], os.Args[3])
 		}
-		config.UserID = os.Args[1]
-		deviceName := ""
-		if len(os.Args) > 2 {
-			deviceName = os.Args[2]
-		}
-		registerDevice(deviceName)
+	}
+
+	// If not enrolled, die
+	if config.AgentJWT == "" {
+		log.Println("Agent not enrolled. Use --enroll <server_url> <token> to register.")
+		return
 	}
 
 	// Start background tasks
@@ -101,14 +103,49 @@ func main() {
 	select {}
 }
 
+func enrollDevice(serverURL, token string) {
+	log.Println("Enrolling device with token...")
+
+	hostInfo, _ := host.Info()
+	enrollPayload := map[string]string{
+		"enrollment_token": token,
+		"hostname":         hostInfo.Hostname,
+		"os":               hostInfo.OS,
+	}
+	body, _ := json.Marshal(enrollPayload)
+
+	resp, err := http.Post(serverURL+"/api/agent/enroll", "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		log.Fatal("Connection failed:", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		log.Fatal("Enrollment failed: ", string(body))
+	}
+
+	var result struct {
+		AgentID string `json:"agent_id"`
+		Token   string `json:"token"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	config.DeviceID = result.AgentID
+	config.AgentJWT = result.Token
+	config.ServerURL = serverURL
+	saveConfig()
+
+	log.Printf("Successfully enrolled! Agent ID: %s", config.DeviceID)
+	os.Exit(0)
+}
+
 func loadConfig() {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		log.Println("No existing config, will register as new device")
 		return
 	}
 	json.Unmarshal(data, &config)
-	log.Printf("Loaded config: DeviceID=%s, UserID=%s", config.DeviceID, config.UserID)
 }
 
 func saveConfig() {
@@ -118,7 +155,6 @@ func saveConfig() {
 
 	data, _ := json.MarshalIndent(config, "", "  ")
 	os.WriteFile(configPath, data, 0600)
-	log.Println("Config saved")
 }
 
 func getSystemInfo() Device {
@@ -180,7 +216,6 @@ func getPublicIP() string {
 }
 
 func getFluxID() string {
-	// Check if Flux/RustDesk is installed and get ID
 	var configFile string
 	switch runtime.GOOS {
 	case "windows":
@@ -198,46 +233,6 @@ func getFluxID() string {
 	return strings.TrimSpace(string(data))
 }
 
-func registerDevice(customName string) {
-	log.Println("Registering device...")
-
-	device := getSystemInfo()
-	device.UserID = config.UserID
-	if customName != "" {
-		device.Name = customName
-	}
-
-	body, _ := json.Marshal(device)
-
-	req, _ := http.NewRequest("POST", SUPABASE_URL+"/rest/v1/devices", bytes.NewBuffer(body))
-	req.Header.Set("apikey", SUPABASE_KEY)
-	req.Header.Set("Authorization", "Bearer "+SUPABASE_KEY)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Prefer", "return=representation")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Fatal("Failed to register device:", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode >= 400 {
-		log.Fatal("Registration failed:", string(respBody))
-	}
-
-	var devices []Device
-	json.Unmarshal(respBody, &devices)
-	if len(devices) > 0 {
-		config.DeviceID = devices[0].ID
-		config.FluxID = devices[0].FluxID
-		saveConfig()
-		log.Printf("Device registered successfully! ID: %s", config.DeviceID)
-	}
-}
-
 func heartbeatLoop() {
 	for {
 		sendHeartbeat()
@@ -246,21 +241,29 @@ func heartbeatLoop() {
 }
 
 func sendHeartbeat() {
-	if config.DeviceID == "" {
+	if config.AgentJWT == "" {
 		return
 	}
 
 	device := getSystemInfo()
-	device.ID = config.DeviceID
-	device.UserID = config.UserID
+	metrics := map[string]interface{}{
+		"cpu":        device.CPU,
+		"ram_total":  device.RAMTotal,
+		"ram_used":   device.RAMUsed,
+		"disk_total": device.DiskTotal,
+		"disk_used":  device.DiskUsed,
+		"public_ip":  device.PublicIP,
+		"ip_address": device.IPAddress,
+		"last_seen":  device.LastSeen,
+	}
 
-	body, _ := json.Marshal(device)
+	payload := map[string]interface{}{
+		"metrics": metrics,
+	}
+	body, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequest("PATCH", 
-		SUPABASE_URL+"/rest/v1/devices?id=eq."+config.DeviceID, 
-		bytes.NewBuffer(body))
-	req.Header.Set("apikey", SUPABASE_KEY)
-	req.Header.Set("Authorization", "Bearer "+SUPABASE_KEY)
+	req, _ := http.NewRequest("POST", config.ServerURL+"/api/agent/heartbeat", bytes.NewBuffer(body))
+	req.Header.Set("Authorization", "Bearer "+config.AgentJWT)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
@@ -281,15 +284,12 @@ func commandPollLoop() {
 }
 
 func pollCommands() {
-	if config.DeviceID == "" {
+	if config.AgentJWT == "" {
 		return
 	}
 
-	req, _ := http.NewRequest("GET",
-		SUPABASE_URL+"/rest/v1/commands?device_id=eq."+config.DeviceID+"&status=eq.pending&order=created_at.asc",
-		nil)
-	req.Header.Set("apikey", SUPABASE_KEY)
-	req.Header.Set("Authorization", "Bearer "+SUPABASE_KEY)
+	req, _ := http.NewRequest("GET", config.ServerURL+"/api/agent/commands", nil)
+	req.Header.Set("Authorization", "Bearer "+config.AgentJWT)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -298,9 +298,12 @@ func pollCommands() {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != 200 {
+		return
+	}
+
 	var commands []Command
-	body, _ := io.ReadAll(resp.Body)
-	json.Unmarshal(body, &commands)
+	json.NewDecoder(resp.Body).Decode(&commands)
 
 	for _, cmd := range commands {
 		executeCommand(cmd)
@@ -310,7 +313,6 @@ func pollCommands() {
 func executeCommand(cmd Command) {
 	log.Printf("Executing command: %s (type: %s)", cmd.ID, cmd.CommandType)
 
-	// Update status to running
 	updateCommandStatus(cmd.ID, "running", "")
 
 	var result string
@@ -342,9 +344,8 @@ func executeCommand(cmd Command) {
 	}
 
 	updateCommandStatus(cmd.ID, status, result)
-	log.Printf("Command %s %s: %s", cmd.ID, status, result)
+	log.Printf("Command %s %s", cmd.ID, status)
 
-	// Log to Supabase
 	addLog("info", fmt.Sprintf("Command %s executed: %s", cmd.CommandType, status), "agent")
 }
 
@@ -355,33 +356,36 @@ func updateCommandStatus(cmdID, status, result string) {
 	}
 	body, _ := json.Marshal(data)
 
-	req, _ := http.NewRequest("PATCH",
-		SUPABASE_URL+"/rest/v1/commands?id=eq."+cmdID,
-		bytes.NewBuffer(body))
-	req.Header.Set("apikey", SUPABASE_KEY)
-	req.Header.Set("Authorization", "Bearer "+SUPABASE_KEY)
+	req, _ := http.NewRequest("POST", config.ServerURL+"/api/agent/commands/"+cmdID+"/result", bytes.NewBuffer(body))
+	req.Header.Set("Authorization", "Bearer "+config.AgentJWT)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println("Status update failed:", err)
+		return
+	}
 	if resp != nil {
 		resp.Body.Close()
 	}
 }
 
 func addLog(level, message, source string) {
-	data := map[string]string{
-		"device_id": config.DeviceID,
-		"user_id":   config.UserID,
-		"level":     level,
-		"message":   message,
-		"source":    source,
+	logs := []map[string]string{
+		{
+			"level":   level,
+			"message": message,
+			"source":  source,
+		},
 	}
-	body, _ := json.Marshal(data)
+	payload := map[string]interface{}{
+		"logs": logs,
+	}
+	body, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequest("POST", SUPABASE_URL+"/rest/v1/logs", bytes.NewBuffer(body))
-	req.Header.Set("apikey", SUPABASE_KEY)
-	req.Header.Set("Authorization", "Bearer "+SUPABASE_KEY)
+	req, _ := http.NewRequest("POST", config.ServerURL+"/api/agent/logs", bytes.NewBuffer(body))
+	req.Header.Set("Authorization", "Bearer "+config.AgentJWT)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}

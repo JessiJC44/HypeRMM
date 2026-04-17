@@ -49,6 +49,28 @@ export interface Site {
   createdAt?: string;
 }
 
+export interface Command {
+  id: string;
+  userId: string;
+  deviceId: string;
+  commandType: 'ping' | 'restart' | 'shutdown' | 'run_script' | 'get_info' | 'install_flux' | 'scan_patches' | 'install_patch';
+  payload: string | null;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  result: string | null;
+  createdAt: any;
+  completedAt: any | null;
+}
+
+export interface DeviceLog {
+  id: string;
+  userId: string;
+  deviceId: string;
+  level: 'info' | 'warning' | 'error' | 'critical';
+  message: string;
+  source: 'agent' | 'system' | 'command';
+  createdAt: any;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;

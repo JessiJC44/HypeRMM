@@ -414,13 +414,21 @@ export function Admin() {
                         )}
                       </div>
                     ) : (
-                      <div className="p-6 bg-muted/20 border border-dashed border-border rounded-2xl text-center">
-                        <p className="text-sm font-bold text-muted-foreground italic">
-                          Biometric authentication is not supported on this browser or device.
+                      <div className="p-6 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-center">
+                        <p className="text-sm font-bold text-rose-600 italic">
+                          Face ID / Touch ID is restricted by browser security policies in this preview window.
                         </p>
-                        <p className="text-[10px] text-muted-foreground mt-2 uppercase tracking-wide">
-                          Try Safari on macOS/iOS or Chrome on a device with biometric sensors.
+                        <p className="text-[10px] text-muted-foreground mt-3 uppercase tracking-wide font-black">
+                          Open the app in a new tab to manage your passkeys.
                         </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(window.location.href, '_blank')}
+                          className="mt-4 w-full rounded-xl border-dashed border-rose-500/40 hover:border-rose-500 text-rose-600 font-bold uppercase tracking-widest text-[9px]"
+                        >
+                          Open in New Tab
+                        </Button>
                       </div>
                     )}
                   </div>

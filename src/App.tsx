@@ -100,9 +100,26 @@ export default function App() {
         // Primary Auth Complete
         setAuthStep('primary-auth-complete');
 
-        // Check if TOTP is enabled
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        const userData = userDoc.data();
+        // Check if user document exists, create it if not
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        const userDoc = await getDoc(userRef);
+        let userData = userDoc.data();
+
+        if (!userDoc.exists()) {
+          userData = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+            role: firebaseUser.email === 'sedrayiokoraz@gmail.com' ? 'admin' : 'user',
+            createdAt: serverTimestamp(),
+            lastLogin: serverTimestamp()
+          };
+          await setDoc(userRef, userData);
+        } else {
+          // Update last login
+          await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
+        }
         
         // Handle Email verification if needed
         if (method === 'email' && !firebaseUser.emailVerified) {
@@ -189,6 +206,7 @@ export default function App() {
           <MFAChoice
             onChoosePasskey={() => setMfaSetupMethod('passkey')}
             onChooseTOTP={() => setMfaSetupMethod('totp')}
+            onBack={() => auth.signOut()}
             passkeySupported={passkeySupported}
           />
           <Toaster position="top-right" />
@@ -206,6 +224,7 @@ export default function App() {
               setAuthStep('authenticated');
             }}
             onUseTOTPInstead={() => setMfaSetupMethod('totp')}
+            onBack={() => setMfaSetupMethod('choice')}
           />
           <Toaster position="top-right" />
         </>
@@ -221,6 +240,7 @@ export default function App() {
               setIsMfaVerified(true);
               setAuthStep('authenticated');
             }}
+            onBack={() => setMfaSetupMethod('choice')}
             onUsePasskeyInstead={passkeySupported ? () => setMfaSetupMethod('passkey') : undefined}
           />
           <Toaster position="top-right" />
@@ -242,6 +262,7 @@ export default function App() {
               setAuthStep('authenticated');
             }}
             onTryAnotherMethod={() => setShow2FAMethod('totp')}
+            onSignOut={() => auth.signOut()}
           />
           <Toaster position="top-right" />
         </>

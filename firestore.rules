@@ -2,86 +2,46 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // ===============================================================
-    // Assumed Data Model
+    // Global Deny
     // ===============================================================
-    //
-    // Collection: users
-    // Document ID: {userId}
-    // Fields:
-    //   - uid: string (required)
-    //   - email: string (required)
-    //   - displayName: string
-    //   - photoURL: string
-    //   - role: string (admin, user)
-    //   - createdAt: timestamp
-    //
-    // Collection: devices
-    // Document ID: {deviceId}
-    // Fields:
-    //   - id: string
-    //   - name: string (required)
-    //   - type: string (required, workstation|server|laptop|mobile)
-    //   - status: string (required, online|offline|warning)
-    //   - ip: string
-    //   - customer: string
-    //   - lastSeen: timestamp
-    //
-    // Collection: tickets
-    // Document ID: {ticketId}
-    // Fields:
-    //   - id: string
-    //   - title: string (required)
-    //   - customer: string (required)
-    //   - status: string (required, open|pending|resolved|closed)
-    //   - priority: string (required, low|medium|high|critical)
-    //   - assignedTo: string
-    //   - createdAt: timestamp
-    //
-    // Collection: alerts
-    // Document ID: {alertId}
-    // Fields:
-    //   - id: string
-    //   - deviceId: string
-    //   - deviceName: string
-    //   - message: string (required)
-    //   - severity: string (required, info|warning|critical)
-    //   - timestamp: timestamp
-    //
-    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
     // ===============================================================
     // Helper Functions
     // ===============================================================
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
 
     function isAdmin() {
-      return isAuthenticated() && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isSignedIn() && (
+        (request.auth.token.email == "sedrayiokoraz@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin')
+      );
     }
 
     function isDocOwner() {
-      return isAuthenticated() && request.auth.uid == resource.data.userId;
+      return isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    // Validation helpers
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    // For creation: check required fields and size
+    function isValidCreation(required, maxSize) {
+      return incoming().keys().hasAll(required) && incoming().keys().size() <= maxSize;
     }
 
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
-    }
-
-    function isValidString(field, min, max) {
-      return request.resource.data[field] is string && 
-             request.resource.data[field].size() >= min && 
-             request.resource.data[field].size() <= max;
-    }
+    // For updates: check only specific fields changed
+    function affectedKeys() { return request.resource.data.diff(resource.data).affectedKeys(); }
 
     // ===============================================================
     // Collection Rules
@@ -89,65 +49,75 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && isOwner(userId) && 
-                      hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt', 'mfaSecret', 'mfaMethod', 'phoneNumber', 'totpEnabled', 'totpSecret']) &&
-                      request.resource.data.role == 'user'; // Default role
-      allow update: if isAuthenticated() && isOwner(userId) && 
-                      hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt', 'mfaSecret', 'mfaMethod', 'phoneNumber', 'totpEnabled', 'totpSecret']) &&
-                      request.resource.data.role == resource.data.role; // Prevent self-role-escalation
+      allow create: if isOwner(userId) && 
+                      isValidCreation(['uid', 'email'], 10) &&
+                      (incoming().role == 'user' || (request.auth.token.email == "sedrayiokoraz@gmail.com" && incoming().role == 'admin'));
+      allow update: if isOwner(userId) && 
+                      incoming().role == existing().role &&
+                      affectedKeys().hasOnly(['displayName', 'photoURL', 'phoneNumber', 'lastLogin']);
       allow delete: if isAdmin();
     }
 
-    match /emailCodes/{docId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == docId;
+    match /devices/{deviceId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow write: if false; // Writes only via Admin SDK
     }
 
-    match /devices/{deviceId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if (isDocOwner() || isAdmin()) && 
-                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['userId']));
-      allow delete: if isDocOwner() || isAdmin();
+    match /commands/{commandId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow write: if false; // Writes only via Admin SDK
+    }
+
+    match /device_logs/{logId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow write: if false; // Writes only via Admin SDK
     }
 
     match /tickets/{ticketId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid &&
-                      isValidString('title', 1, 200) &&
-                      isValidString('customer', 1, 100);
-      allow update: if (isDocOwner() || isAdmin()) &&
-                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['userId']));
-      allow delete: if isDocOwner() || isAdmin();
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidCreation(['title', 'userId'], 15);
+      allow update: if (isAdmin() || (isSignedIn() && existing().userId == request.auth.uid)) &&
+                      !affectedKeys().hasAny(['userId']);
+      allow delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
     }
 
     match /alerts/{alertId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isDocOwner() || isAdmin();
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
     }
 
     match /sites/{siteId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isDocOwner() || isAdmin();
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
     }
 
     match /software/{softwareId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isDocOwner() || isAdmin();
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
     }
 
     match /patches/{patchId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isDocOwner() || isAdmin();
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
     }
 
-    match /passkeys/{credentialId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isDocOwner() || isAdmin();
+    match /passkeys/{docId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+    }
+
+    match /agent_enrollment_tokens/{tokenId} {
+      allow read, write: if false; // Backend only
+    }
+    
+    // Legacy mapping if needed for older migrations
+    match /agent_enrollments/{tokenHash} {
+      allow read, write: if false;
     }
   }
 }

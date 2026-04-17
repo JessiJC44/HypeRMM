@@ -12,8 +12,8 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { auth } from '../lib/firebase';
-import { supabaseService } from '../services/supabaseService';
-import { SupabaseDevice, SupabaseCommand, SupabaseLog } from '../types/supabase';
+import { firestoreService } from '../services/firestoreService';
+import { Device, Command, DeviceLog } from '../types';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
 
@@ -30,9 +30,9 @@ const AppleIcon = ({ size = 16, className = "" }: { size?: number; className?: s
 );
 
 export function RMMDashboard() {
-  const [devices, setDevices] = React.useState<SupabaseDevice[]>([]);
-  const [commands, setCommands] = React.useState<SupabaseCommand[]>([]);
-  const [logs, setLogs] = React.useState<SupabaseLog[]>([]);
+  const [devices, setDevices] = React.useState<Device[]>([]);
+  const [commands, setCommands] = React.useState<Command[]>([]);
+  const [logs, setLogs] = React.useState<DeviceLog[]>([]);
   const [stats, setStats] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -40,7 +40,6 @@ export function RMMDashboard() {
   const [commandType, setCommandType] = React.useState<string>('ping');
   const [commandPayload, setCommandPayload] = React.useState<string>('');
   const [sendingCommand, setSendingCommand] = React.useState(false);
-  const [addingDevice, setAddingDevice] = React.useState(false);
 
   React.useEffect(() => {
     const user = auth.currentUser;
@@ -49,15 +48,9 @@ export function RMMDashboard() {
       return;
     }
 
-    // Safety timeout: stop loading after 10 seconds no matter what
-    const timeout = setTimeout(() => {
-      setLoading(false);
-      setError("Connection timed out. Please ensure your Supabase tables are created in the SQL Editor.");
-    }, 10000);
-
     const loadStats = async () => {
       try {
-        const data = await supabaseService.getDashboardStats(user.uid);
+        const data = await firestoreService.getDashboardStats(user.uid);
         setStats(data);
       } catch (err) {
         console.error('Failed to load stats:', err);
@@ -69,28 +62,25 @@ export function RMMDashboard() {
     let unsubLogs = () => {};
 
     try {
-      unsubDevices = supabaseService.subscribeToDevices(user.uid, (data) => {
+      unsubDevices = firestoreService.subscribeToDevices(user.uid, (data) => {
         setDevices(data);
         setLoading(false);
         setError(null);
-        clearTimeout(timeout);
       });
 
-      unsubCommands = supabaseService.subscribeToCommands(user.uid, setCommands);
-      unsubLogs = supabaseService.subscribeToLogs(user.uid, setLogs);
+      unsubCommands = firestoreService.subscribeToCommands(user.uid, setCommands);
+      unsubLogs = firestoreService.subscribeToDeviceLogs(user.uid, setLogs);
       loadStats();
     } catch (err: any) {
       console.error("Subscription error:", err);
-      setError(err.message || "Failed to connect to Supabase");
+      setError(err.message || "Failed to connect to monitoring service");
       setLoading(false);
-      clearTimeout(timeout);
     }
 
     return () => {
       unsubDevices();
       unsubCommands();
       unsubLogs();
-      clearTimeout(timeout);
     };
   }, []);
 
@@ -100,65 +90,38 @@ export function RMMDashboard() {
 
     setSendingCommand(true);
     try {
-      await supabaseService.sendCommand(
-        user.uid,
+      await firestoreService.sendCommand(
         selectedDevice,
-        commandType as any,
+        commandType,
         commandPayload || undefined
       );
-      toast.success('Command sent successfully');
+      toast.success('Command queued successfully');
       setCommandPayload('');
       
       // Refresh stats
-      const data = await supabaseService.getDashboardStats(user.uid);
+      const data = await firestoreService.getDashboardStats(user.uid);
       setStats(data);
-    } catch (error) {
-      toast.error('Failed to send command');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to send command');
       console.error(error);
     } finally {
       setSendingCommand(false);
     }
   };
 
-  const handleAddTestDevice = async () => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    setAddingDevice(true);
-    try {
-      await supabaseService.addDevice(user.uid, {
-        name: `Test-PC-${Math.floor(Math.random() * 1000)}`,
-        user_id: user.uid,
-        os: ['Windows', 'Linux', 'macOS'][Math.floor(Math.random() * 3)],
-        ip_address: `192.168.1.${Math.floor(Math.random() * 254)}`,
-        status: Math.random() > 0.3 ? 'online' : 'offline'
-      });
-      toast.success('Test device added');
-      
-      // Refresh stats
-      const data = await supabaseService.getDashboardStats(user.uid);
-      setStats(data);
-    } catch (error) {
-      toast.error('Failed to add device');
-      console.error(error);
-    } finally {
-      setAddingDevice(false);
-    }
-  };
-
   const handleDeleteDevice = async (deviceId: string) => {
     try {
-      await supabaseService.deleteDevice(deviceId);
-      toast.success('Device deleted');
+      await firestoreService.deleteDevice(deviceId);
+      toast.success('Device deletion requested');
       
       // Refresh stats
       const user = auth.currentUser;
       if (user) {
-        const data = await supabaseService.getDashboardStats(user.uid);
+        const data = await firestoreService.getDashboardStats(user.uid);
         setStats(data);
       }
     } catch (error) {
-      toast.error('Failed to delete device');
+      toast.error('Failed to delete device (Admin required)');
       console.error(error);
     }
   };
@@ -177,7 +140,7 @@ export function RMMDashboard() {
     return (
       <div className="p-8 flex flex-col items-center justify-center h-[calc(100vh-64px)] space-y-4">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
-        <p className="text-muted-foreground animate-pulse">Connecting to Supabase...</p>
+        <p className="text-muted-foreground animate-pulse">Loading dashboard...</p>
       </div>
     );
   }
@@ -191,10 +154,6 @@ export function RMMDashboard() {
         <div className="space-y-2">
           <h2 className="text-xl font-bold">Connection Error</h2>
           <p className="text-muted-foreground">{error}</p>
-        </div>
-        <div className="bg-muted p-4 rounded-lg text-left w-full space-y-2">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Fix:</p>
-          <p className="text-sm">Go to Supabase SQL Editor and run the script I provided to create the tables.</p>
         </div>
         <Button onClick={() => window.location.reload()} variant="outline">
           <RefreshCw size={16} className="mr-2" />
@@ -213,16 +172,8 @@ export function RMMDashboard() {
       >
         <div>
           <h1 className="text-2xl font-bold">RMM Dashboard</h1>
-          <p className="text-muted-foreground text-sm">Powered by Supabase • Real-time monitoring</p>
+          <p className="text-muted-foreground text-sm">Secure Remote Management • Real-time</p>
         </div>
-        <Button onClick={handleAddTestDevice} variant="outline" disabled={addingDevice}>
-          {addingDevice ? (
-            <RefreshCw size={16} className="animate-spin mr-2" />
-          ) : (
-            <Plus size={16} className="mr-2" />
-          )}
-          Add Test Device
-        </Button>
       </motion.div>
 
       {/* Stats Cards */}
@@ -234,17 +185,17 @@ export function RMMDashboard() {
                 <CardTitle className="text-sm font-medium text-muted-foreground">Total Devices</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.totalDevices}</div>
+                <div className="text-2xl font-bold">{stats.managedDevices}</div>
               </CardContent>
             </Card>
           </motion.div>
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }}>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Online</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Open Tickets</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-500">{stats.onlineDevices}</div>
+                <div className="text-2xl font-bold text-brand-blue">{stats.openTickets}</div>
               </CardContent>
             </Card>
           </motion.div>
@@ -261,10 +212,10 @@ export function RMMDashboard() {
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }}>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Critical Logs</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Active Alerts</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-rose-500">{stats.criticalLogs}</div>
+                <div className="text-2xl font-bold text-rose-500">{stats.activeAlerts}</div>
               </CardContent>
             </Card>
           </motion.div>
@@ -303,7 +254,7 @@ export function RMMDashboard() {
                     </div>
                     <div>
                       <p className="font-medium">{device.name}</p>
-                      <p className="text-xs text-muted-foreground">{device.os} • {device.ip_address}</p>
+                      <p className="text-xs text-muted-foreground">{device.os} • {device.ipAddress}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -430,9 +381,9 @@ export function RMMDashboard() {
               commands.slice(0, 10).map((cmd) => (
                 <div key={cmd.id} className="flex items-center justify-between p-2 rounded border">
                   <div>
-                    <p className="font-medium text-sm">{cmd.command_type}</p>
+                    <p className="font-medium text-sm">{cmd.commandType}</p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(cmd.created_at).toLocaleString()}
+                      {cmd.createdAt?.seconds ? new Date(cmd.createdAt.seconds * 1000).toLocaleString() : 'Just now'}
                     </p>
                   </div>
                   <Badge variant={
@@ -472,7 +423,7 @@ export function RMMDashboard() {
                   <div className="min-w-0">
                     <p className="text-sm truncate">{log.message}</p>
                     <p className="text-xs text-muted-foreground">
-                      {log.source} • {new Date(log.created_at).toLocaleString()}
+                      {log.source} • {log.createdAt?.seconds ? new Date(log.createdAt.seconds * 1000).toLocaleString() : 'Just now'}
                     </p>
                   </div>
                 </div>

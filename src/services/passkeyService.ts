@@ -10,43 +10,40 @@ import { getAuthenticatorSelection } from '../utils/deviceDetector';
 export const passkeyService = {
   // Check if browser supports passkeys
   isSupported: async (): Promise<boolean> => {
-    if (!browserSupportsWebAuthn()) return false;
-    
-    // Check if platform authenticator is available (biometrics)
-    try {
-      if (typeof window !== 'undefined' && 'PublicKeyCredential' in window) {
-        const platformAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-        if (!platformAvailable) return false;
-
-        // Check for Permissions Policy block
-        // Check features specifically required by WebAuthn
-        const features = ['publickey-credentials-get', 'publickey-credentials-create'];
-        
-        // Legacy featurePolicy check
-        if ((document as any).featurePolicy) {
-          const policy = (document as any).featurePolicy;
-          const allowed = policy.allowedFeatures();
-          if (features.some(f => !allowed.includes(f))) {
-            console.warn("WebAuthn features are restricted by featurePolicy.");
-            return false;
-          }
-        }
-
-        // Modern permissionsPolicy check
-        if ((document as any).permissionsPolicy) {
-          const policy = (document as any).permissionsPolicy;
-          const allowed = policy.allowedFeatures();
-          if (features.some(f => !allowed.includes(f))) {
-            console.warn("WebAuthn features are restricted by permissionsPolicy.");
-            return false;
-          }
-        }
-
-        return true;
-      }
-    } catch {
+    if (!browserSupportsWebAuthn()) {
+      console.log('WebAuthn support: Basic support missing');
       return false;
     }
+    try {
+      if (typeof window !== 'undefined' && 'PublicKeyCredential' in window) {
+        const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        console.log('WebAuthn platform available:', available);
+        
+        // Detect if we are in an iframe
+        const inIframe = window.self !== window.top;
+        if (inIframe) {
+          console.log('WebAuthn: Running in iframe, checking Permissions Policy...');
+          // Feature Policy (older Chromium) or Permissions Policy
+          const doc = document as any;
+          if (doc.featurePolicy) {
+            const createPolicy = doc.featurePolicy.allowsFeature('publickey-credentials-create');
+            const getPolicy = doc.featurePolicy.allowsFeature('publickey-credentials-get');
+            console.log('WebAuthn Policy: create=', createPolicy, 'get=', getPolicy);
+            
+            // If the policy explicitly denies it, we know it will fail
+            if (!createPolicy || !getPolicy) {
+              console.warn('WebAuthn is BLOCKED by iframe Permissions Policy');
+            }
+          }
+        }
+        
+        return available;
+      }
+    } catch (error) {
+      console.error('Error checking for platform authenticator:', error);
+      return false;
+    }
+    console.log('WebAuthn support: PublicKeyCredential not in window');
     return false;
   },
 
@@ -95,8 +92,8 @@ export const passkeyService = {
         },
         user: {
           id: btoa(userId),
-          name: email,
-          displayName: email.split('@')[0],
+          name: email || userId,
+          displayName: email && typeof email === 'string' ? email.split('@')[0] : userId.slice(0, 8),
         },
         pubKeyCredParams: [
           { alg: -7, type: 'public-key' },   // ES256

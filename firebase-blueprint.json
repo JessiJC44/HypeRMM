@@ -100,6 +100,50 @@
         "releaseDate": { "type": "string", "format": "date" }
       },
       "required": ["name", "severity", "status"]
+    },
+    "Command": {
+      "title": "Command",
+      "description": "Remote execution command",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string" },
+        "payload": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "result": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["deviceId", "userId", "type", "status"]
+    },
+    "DeviceLog": {
+      "title": "DeviceLog",
+      "description": "Log entries from devices",
+      "type": "object",
+      "properties": {
+        "deviceId": { "type": "string" },
+        "userId": { "type": "string" },
+        "level": { "type": "string", "enum": ["info", "warning", "error"] },
+        "message": { "type": "string" },
+        "source": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["deviceId", "userId", "level", "message"]
+    },
+    "AgentEnrollmentToken": {
+      "title": "AgentEnrollmentToken",
+      "description": "Enrollment token for new agents",
+      "type": "object",
+      "properties": {
+        "tokenHash": { "type": "string" },
+        "userId": { "type": "string" },
+        "used": { "type": "boolean" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["tokenHash", "userId", "used", "expiresAt"]
     }
   },
   "firestore": {
@@ -130,6 +174,18 @@
     "/patches/{patchId}": {
       "schema": "Patch",
       "description": "Software patches"
+    },
+    "/commands/{commandId}": {
+      "schema": "Command",
+      "description": "Agent commands"
+    },
+    "/device_logs/{logId}": {
+      "schema": "DeviceLog",
+      "description": "Device activity logs"
+    },
+    "/agent_enrollment_tokens/{tokenId}": {
+      "schema": "AgentEnrollmentToken",
+      "description": "Secure enrollment tokens"
     }
   }
 }

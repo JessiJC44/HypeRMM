@@ -31,17 +31,10 @@ export function NetworkDiscovery() {
       const user = auth.currentUser;
       if (!user) throw new Error('Not authenticated');
 
-      await firestoreService.addDevice(user.uid, {
-        name,
-        ipAddress: ip,
-        type: 'workstation',
-        os: 'Windows 11 Pro',
-        customer: 'Discovered',
-        status: 'online'
-      });
-      toast.success(`Agent installed successfully on ${name}`);
+      // Agents must be installed manually or via remote shell using the enrollment token.
+      toast.info(`To install on ${name} (${ip}), use the "Installer un agent" command in Assets to get an enrollment token.`);
     } catch (error) {
-      toast.error("Failed to install agent");
+      toast.error("Failed to initiate agent installation");
     }
   };
 

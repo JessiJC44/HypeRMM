@@ -12,10 +12,11 @@ import { Shield, Smartphone, RefreshCw } from 'lucide-react';
 interface Props {
   user: any;
   onComplete: () => void;
+  onBack: () => void;
   onUsePasskeyInstead?: () => void;
 }
 
-export function TOTPSetup({ user, onComplete, onUsePasskeyInstead }: Props) {
+export function TOTPSetup({ user, onComplete, onBack, onUsePasskeyInstead }: Props) {
   const [secret, setSecret] = React.useState<string>('');
   const [otpAuthUrl, setOtpAuthUrl] = React.useState<string>('');
   const [code, setCode] = React.useState('');
@@ -115,21 +116,27 @@ export function TOTPSetup({ user, onComplete, onUsePasskeyInstead }: Props) {
                 <p>Enter the 6-digit code to verify</p>
               </div>
             </div>
-            <Button onClick={() => setStep('scan')} className="w-full">
+            <Button onClick={() => setStep('scan')} className="w-full h-12 rounded-xl font-bold">
               <Smartphone className="mr-2" size={18} />
               Continue Setup
             </Button>
 
-            {onUsePasskeyInstead && (
-              <div className="pt-2 text-center">
+            <div className="pt-2 flex flex-col gap-4 text-center">
+              {onUsePasskeyInstead && (
                 <button
                   onClick={onUsePasskeyInstead}
-                  className="text-[10px] text-primary hover:text-primary/80 transition-colors font-black uppercase tracking-widest"
+                  className="text-[10px] text-primary hover:text-primary/80 transition-colors font-black uppercase tracking-widest bg-primary/5 py-3 rounded-lg border border-primary/20"
                 >
-                  Use Biometric instead
+                  Setup with Face ID / Touch ID instead
                 </button>
-              </div>
-            )}
+              )}
+              <button
+                onClick={onBack}
+                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors font-black uppercase tracking-widest"
+              >
+                Back to choice
+              </button>
+            </div>
           </CardContent>
         </Card>
       </div>
