@@ -7,44 +7,57 @@ import { doc, setDoc, collection, query, where, getDocs, deleteDoc } from 'fireb
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { getAuthenticatorSelection } from '../utils/deviceDetector';
 
+const getDeviceName = (): string => {
+  const ua = navigator.userAgent;
+  if (ua.includes('iPhone')) return 'iPhone';
+  if (ua.includes('iPad')) return 'iPad';
+  if (ua.includes('Mac')) return 'Mac';
+  if (ua.includes('Windows')) return 'Windows';
+  if (ua.includes('Android')) return 'Android';
+  if (ua.includes('Linux')) return 'Linux';
+  return 'Device';
+};
+
 export const passkeyService = {
   // Check if browser supports passkeys
   isSupported: async (): Promise<boolean> => {
     if (!browserSupportsWebAuthn()) {
-      console.log('WebAuthn support: Basic support missing');
       return false;
     }
     try {
       if (typeof window !== 'undefined' && 'PublicKeyCredential' in window) {
-        const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-        console.log('WebAuthn platform available:', available);
-        
-        // Detect if we are in an iframe
-        const inIframe = window.self !== window.top;
-        if (inIframe) {
-          console.log('WebAuthn: Running in iframe, checking Permissions Policy...');
-          // Feature Policy (older Chromium) or Permissions Policy
-          const doc = document as any;
-          if (doc.featurePolicy) {
-            const createPolicy = doc.featurePolicy.allowsFeature('publickey-credentials-create');
-            const getPolicy = doc.featurePolicy.allowsFeature('publickey-credentials-get');
-            console.log('WebAuthn Policy: create=', createPolicy, 'get=', getPolicy);
-            
-            // If the policy explicitly denies it, we know it will fail
-            if (!createPolicy || !getPolicy) {
-              console.warn('WebAuthn is BLOCKED by iframe Permissions Policy');
-            }
-          }
-        }
-        
-        return available;
+        return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
       }
     } catch (error) {
       console.error('Error checking for platform authenticator:', error);
       return false;
     }
-    console.log('WebAuthn support: PublicKeyCredential not in window');
     return false;
+  },
+
+  // Proactively check if Policies are blocking WebAuthn in iframes
+  getPolicyStatus: (): { blocked: boolean; reason: string | null } => {
+    if (typeof window === 'undefined') return { blocked: false, reason: null };
+    
+    const inIframe = window.self !== window.top;
+    if (!inIframe) return { blocked: false, reason: null };
+
+    const doc = document as any;
+    if (doc.featurePolicy) {
+      const createPolicy = doc.featurePolicy.allowsFeature('publickey-credentials-create');
+      const getPolicy = doc.featurePolicy.allowsFeature('publickey-credentials-get');
+      
+      if (!createPolicy || !getPolicy) {
+        return { 
+          blocked: true, 
+          reason: 'Iframe Permissions Policy explicitly blocks WebAuthn features.' 
+        };
+      }
+    }
+
+    // Even if allowsFeature returns true, actual browsers like Safari 
+    // often block the operation if the iframe is cross-origin.
+    return { blocked: false, reason: null };
   },
 
   // Check if user has registered passkeys
@@ -110,20 +123,23 @@ export const passkeyService = {
       // Store credential in Firestore
       await setDoc(doc(db, 'passkeys', credential.id), {
         credentialId: credential.id,
-        credentialPublicKey: credential.response.publicKey,
+        credentialPublicKey: credential.response.publicKey ?? null,
+        credentialRawAttestation: (credential.response as any).attestationObject ?? null,
+        credentialClientDataJSON: credential.response.clientDataJSON ?? null,
         counter: 0,
         userId,
-        email: email.toLowerCase(),
+        email: (email || '').toLowerCase(),
         createdAt: new Date().toISOString(),
-        deviceName: navigator.userAgent.includes('Mac') ? 'Mac' : 
-                    navigator.userAgent.includes('iPhone') ? 'iPhone' :
-                    navigator.userAgent.includes('iPad') ? 'iPad' :
-                    navigator.userAgent.includes('Windows') ? 'Windows' : 'Device',
+        deviceName: getDeviceName(),
+        transports: (credential.response as any).transports ?? [],
       });
 
       return true;
     } catch (error: any) {
       console.error('Passkey registration failed:', error);
+      console.error('Error Name:', error.name);
+      console.error('Error Message:', error.message);
+      console.error('Error Code:', error.code || error.status);
       
       // Enhanced error normalization for consistency across components
       const errorName = error?.name || error?.code || '';

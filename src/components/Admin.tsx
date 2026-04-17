@@ -168,8 +168,20 @@ export function Admin() {
       } else {
         toast.error('Failed to register passkey');
       }
-    } catch (error) {
-      toast.error('Passkey registration cancelled');
+    } catch (error: any) {
+      console.error('Passkey registration error:', error);
+      const errorMessage = error?.message || String(error);
+      const errorName = error?.name || '';
+
+      if (errorName === 'SecurityError' || errorMessage.includes('Permissions Policy') || errorMessage.includes('feature is not enabled')) {
+        toast.error('Passkey registration is blocked by browser security policies in this preview window. Please open the app in a new tab.', {
+          duration: 8000,
+        });
+      } else if (errorName === 'NotAllowedError') {
+        toast.info('Passkey registration cancelled.');
+      } else {
+        toast.error('Passkey registration failed. Please try again or use another browser.');
+      }
     } finally {
       setRegisteringPasskey(false);
     }

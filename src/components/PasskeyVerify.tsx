@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { passkeyService } from '../services/passkeyService';
 import { toast } from 'sonner';
-import { Fingerprint, RefreshCw } from 'lucide-react';
+import { Fingerprint, RefreshCw, AlertCircle } from 'lucide-react';
 import { getBiometricMethod } from '../utils/deviceDetector';
 
 interface Props {
@@ -15,7 +15,15 @@ interface Props {
 
 export function PasskeyVerify({ user, onVerified, onTryAnotherMethod, onSignOut }: Props) {
   const [verifying, setVerifying] = React.useState(false);
+  const [policyBlocked, setPolicyBlocked] = React.useState(false);
   const biometricMethod = getBiometricMethod();
+
+  React.useEffect(() => {
+    const status = passkeyService.getPolicyStatus();
+    if (status.blocked) {
+      setPolicyBlocked(true);
+    }
+  }, []);
 
   const handleContinue = async () => {
     setVerifying(true);
@@ -82,33 +90,55 @@ export function PasskeyVerify({ user, onVerified, onTryAnotherMethod, onSignOut 
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pb-12 pt-4 px-10 text-center">
-          <div className="bg-muted/30 p-4 rounded-2xl border border-border/50">
-            <p className="text-[11px] font-bold text-muted-foreground leading-relaxed uppercase tracking-wide">
-              Click the button below and follow your device&#39;s native prompt to verify with {biometricMethod}.
-            </p>
-          </div>
+          {policyBlocked ? (
+            <div className="bg-rose-500/10 p-5 rounded-2xl border border-rose-500/20 space-y-4">
+              <div className="flex items-center justify-center text-rose-600 mb-1">
+                <AlertCircle size={24} />
+              </div>
+              <p className="text-xs font-bold text-rose-600 leading-relaxed uppercase tracking-tight">
+                Verification Blocked
+              </p>
+              <p className="text-[10px] text-muted-foreground font-medium">
+                Biometric authentication is restricted in this preview window. Please open the app in a new tab to continue.
+              </p>
+              <Button 
+                onClick={() => window.open(window.location.href, '_blank')}
+                className="w-full h-10 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black uppercase text-[10px] tracking-widest shadow-md"
+              >
+                Open in New Tab
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="bg-muted/30 p-4 rounded-2xl border border-border/50">
+                <p className="text-[11px] font-bold text-muted-foreground leading-relaxed uppercase tracking-wide">
+                  Click the button below and follow your device&#39;s native prompt to verify with {biometricMethod}.
+                </p>
+              </div>
 
-          <Button 
-            onClick={handleContinue} 
-            className="w-full h-14 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-lg shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]" 
-            disabled={verifying}
-          >
-            {verifying ? (
-              <><RefreshCw className="animate-spin mr-3" size={20} /> Verifying...</>
-            ) : (
-              <><Fingerprint className="mr-3" size={22} /> Verify with {biometricMethod}</>
-            )}
-          </Button>
+              <Button 
+                onClick={handleContinue} 
+                className="w-full h-14 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-lg shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]" 
+                disabled={verifying}
+              >
+                {verifying ? (
+                  <><RefreshCw className="animate-spin mr-3" size={20} /> Verifying...</>
+                ) : (
+                  <><Fingerprint className="mr-3" size={22} /> Verify with {biometricMethod}</>
+                )}
+              </Button>
 
-          <div className="pt-2 flex flex-col gap-3">
-            <Button
-              variant="outline"
-              onClick={() => window.open(window.location.href, '_blank')}
-              className="w-full h-11 rounded-xl border-dashed border-primary/40 hover:border-primary text-xs font-bold uppercase tracking-widest text-primary/80"
-            >
-              Open in New Tab (Fixes Security Errors)
-            </Button>
-          </div>
+              <div className="pt-2 flex flex-col gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(window.location.href, '_blank')}
+                  className="w-full h-11 rounded-xl border-dashed border-primary/40 hover:border-primary text-xs font-bold uppercase tracking-widest text-primary/80"
+                >
+                  Open in New Tab (Fixes Security Errors)
+                </Button>
+              </div>
+            </>
+          )}
           
           <div className="pt-4 flex flex-col gap-4">
             <button
