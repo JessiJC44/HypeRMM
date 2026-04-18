@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Settings, User, Shield, Bell, Globe, CreditCard, Key, Database, Mail, Smartphone, Lock, Plus, Download, RefreshCw, Trash2, Copy, X } from 'lucide-react';
+import { Settings, User, Shield, Bell, Globe, CreditCard, Key, Database, Mail, Smartphone, Lock, Plus, Download, RefreshCw, Trash2, Copy, X, FileCode2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,7 @@ import { auth, db } from '@/src/lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { passkeyService } from '../services/passkeyService';
 import { getBiometricMethod } from '../utils/deviceDetector';
+import { Scripts } from './Scripts';
 
 import { firestoreService } from '../services/firestoreService';
 
@@ -203,6 +204,7 @@ export function Admin() {
     { id: 'billing', label: 'Billing & Subscription', icon: CreditCard },
     { id: 'users', label: 'User Management', icon: User },
     { id: 'api', label: 'API & Webhooks', icon: Key },
+    { id: 'scripts', label: 'Script Library', icon: FileCode2 },
     { id: 'backup', label: 'Backup & Restore', icon: Database },
   ];
 
@@ -553,6 +555,12 @@ export function Admin() {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {activeTab === 'scripts' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <Scripts hideHeader />
+            </div>
           )}
 
           {activeTab === 'backup' && (

@@ -8,10 +8,38 @@ export function getBiometricMethod(): string {
   const ua = navigator.userAgent;
   const platform = (navigator as any).platform || '';
   
-  if (/iPhone|iPad|iPod/.test(ua)) return 'Face ID';
-  if (/Mac/.test(platform) && !/iPhone|iPad/.test(ua)) return 'Touch ID';
+  // iPads in Desktop mode (iPadOS) often report themselves as MacIntel
+  // We check for maxTouchPoints to distinguish between a real Mac and an iPad
+  const isIPad = /iPad/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isIPhone = /iPhone|iPod/.test(ua);
+  const isMac = /Mac/.test(platform) && !isIPad && !isIPhone;
+  
+  if (isIPhone) {
+    // Modern iPhones (X and later) use Face ID
+    return 'Face ID';
+  }
+  
+  if (isIPad) {
+    // Heuristic for Face ID vs Touch ID on iPad
+    const w = window.screen.width;
+    const h = window.screen.height;
+    const maxDim = Math.max(w, h);
+    
+    // Modern iPad Pro (Face ID) resolutions (logic points)
+    // 11-inch: 1194 or 1210
+    // 12.9-inch / 13-inch: 1366 or 1376
+    const faceIdModels = [1194, 1210, 1366, 1376];
+    
+    if (faceIdModels.includes(maxDim)) {
+      return 'Face ID';
+    }
+    // Most other iPads (Air, Mini, Base) use Touch ID locally
+    return 'Touch ID';
+  }
+  
+  if (isMac) return 'Touch ID';
   if (/Windows/.test(ua)) return 'Windows Hello';
-  if (/Android/.test(ua)) return 'Fingerprint or Face Unlock';
+  if (/Android/.test(ua)) return 'Biometrics';
   
   return 'Platform Authenticator';
 }

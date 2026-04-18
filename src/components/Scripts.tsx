@@ -50,7 +50,7 @@ interface Script {
   runCount: number;
 }
 
-export function Scripts() {
+export function Scripts({ hideHeader = false }: { hideHeader?: boolean }) {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = React.useState('my-scripts');
   const [scripts, setScripts] = React.useState<Script[]>([]);
@@ -435,237 +435,225 @@ export function Scripts() {
   }
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-black text-foreground tracking-tight">Script Library</h1>
-          <p className="text-sm text-muted-foreground font-bold">Manage, organize, and execute automation scripts.</p>
+    <div className={cn("space-y-6 animate-in fade-in duration-500", !hideHeader && "p-4 lg:p-8")}>
+      {!hideHeader && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-black text-foreground tracking-tight">Script Library</h1>
+            <p className="text-sm text-muted-foreground font-bold">Manage, organize, and execute automation scripts.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={() => fetchScripts()} className="rounded-xl h-11 px-6 font-bold text-muted-foreground border-border">
+              <RefreshCw size={18} className={cn("mr-2", loading && "animate-spin")} />
+              Sync
+            </Button>
+            <Button onClick={handleCreateNew} className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl h-11 px-8 font-black uppercase tracking-widest shadow-lg shadow-primary/20 transition-all hover:scale-[1.02]">
+              <Plus size={20} className="mr-2" />
+              Create Script
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => fetchScripts()} className="rounded-xl h-11 px-6 font-bold text-muted-foreground border-border">
-            <RefreshCw size={18} className={cn("mr-2", loading && "animate-spin")} />
-            Sync
-          </Button>
-          <Button onClick={handleCreateNew} className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl h-11 px-8 font-black uppercase tracking-widest shadow-lg shadow-primary/20 transition-all hover:scale-[1.02]">
-            <Plus size={20} className="mr-2" />
-            Create Script
-          </Button>
-        </div>
-      </div>
+      )}
 
-      <Card className="border-none shadow-sm rounded-3xl overflow-hidden">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <CardHeader className="bg-muted/10 border-b border-border p-0">
-            <div className="px-8 pt-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <TabsList className="bg-transparent h-12 gap-8">
-                <TabsTrigger value="my-scripts" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none h-12 px-2 font-black uppercase tracking-widest text-[11px]">
-                  My Scripts ({scripts.length})
-                </TabsTrigger>
-                <TabsTrigger value="shared" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none h-12 px-2 font-black uppercase tracking-widest text-[11px]">
-                  Shared Library ({sharedScripts.length})
-                </TabsTrigger>
-              </TabsList>
-              
-              <div className="flex items-center gap-3 pb-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <Input 
-                    placeholder="Search scripts..." 
-                    className="pl-10 h-10 w-full md:w-64 rounded-xl bg-muted/20 border-border font-bold text-xs"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                  />
-                </div>
-                <Select value={filterCategory} onValueChange={setFilterCategory}>
-                  <SelectTrigger className="h-10 w-32 rounded-xl border-border bg-muted/20 font-bold text-xs">
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {(categories as string[]).map(c => <SelectItem key={c} value={c}>{(c as string).charAt(0).toUpperCase() + (c as string).slice(1)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+      {hideHeader && (
+        <div className="flex items-center justify-between mb-2">
+           <div className="flex items-center gap-2">
+            <div className="p-2 bg-primary/10 rounded-xl text-primary">
+              <FileCode2 size={20} />
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <TabsContent value="my-scripts" className="m-0">
-              <Table>
-                <TableHeader className="bg-muted/30">
-                  <TableRow className="hover:bg-transparent border-border">
-                    <TableHead className="font-black uppercase tracking-widest text-[10px] py-4 pl-8">Name</TableHead>
-                    <TableHead className="font-black uppercase tracking-widest text-[10px]">Language</TableHead>
-                    <TableHead className="font-black uppercase tracking-widest text-[10px]">Category</TableHead>
-                    <TableHead className="font-black uppercase tracking-widest text-[10px]">OS</TableHead>
-                    <TableHead className="font-black uppercase tracking-widest text-[10px]">Stats</TableHead>
-                    <TableHead className="font-black uppercase tracking-widest text-[10px] text-right pr-8">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="h-32 text-center">
-                        <RefreshCw className="animate-spin mx-auto text-primary" size={24} />
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredScripts.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="h-32 text-center text-muted-foreground font-bold uppercase tracking-widest text-[10px]">
-                        No scripts found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredScripts.map((script) => (
-                      <TableRow key={script.id} className="group border-border hover:bg-muted/20 transition-colors">
-                        <TableCell className="py-4 pl-8">
-                          <div className="flex items-center gap-4">
-                            <div className="p-2.5 bg-primary/5 text-primary rounded-xl border border-primary/10 group-hover:scale-110 transition-transform">
-                              <FileCode2 size={20} />
-                            </div>
-                            <div>
-                              <p className="text-sm font-black text-foreground">{script.name}</p>
-                              <p className="text-[10px] text-muted-foreground font-medium line-clamp-1 max-w-[200px]">{script.description}</p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="rounded-lg font-black uppercase text-[9px] tracking-widest border-border text-muted-foreground">
-                            {script.language === 'powershell' ? 'PS1' : (script.language === 'bash' ? 'SH' : 'PY')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{script.category}</span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            {script.targetOs.map(os => (
-                              <div key={os} title={os} className="p-1 rounded bg-muted/50">
-                                <Monitor size={10} className="text-muted-foreground" />
-                              </div>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[10px] font-black text-foreground">{script.runCount || 0} runs</span>
-                            <span className="text-[9px] font-medium text-muted-foreground">
-                              {script.lastRunAt ? `Last: ${new Date(script.lastRunAt).toLocaleDateString()}` : 'Never run'}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right pr-8">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => {
-                                setRunningScript(script);
-                                // Trigger device fetch
-                                const fetchDevices = async () => {
-                                  const idToken = await auth.currentUser?.getIdToken();
-                                  if (!idToken) return;
-                                  const res = await fetch('/api/flux/devices', { headers: { 'Authorization': `Bearer ${idToken}` } });
-                                  if (res.ok) {
-                                    const data = await res.json();
-                                    setDevices(data.filter((d: any) => d.status === 'online'));
-                                  }
-                                };
-                                fetchDevices();
-                              }}
-                              className="h-9 w-9 rounded-xl text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50"
-                            >
-                              <Play size={16} />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setEditingScript(script)} className="h-9 w-9 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/5">
-                              <Edit size={16} />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(script.id)} className="h-9 w-9 rounded-xl text-rose-500 hover:text-rose-600 hover:bg-rose-50">
-                              <Trash2 size={16} />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TabsContent>
+            <h2 className="text-lg font-black text-foreground uppercase tracking-widest">Script Repository</h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => fetchScripts()} className="rounded-xl h-9 px-4 font-bold text-muted-foreground border-border text-[10px] uppercase tracking-widest">
+              <RefreshCw size={14} className={cn("mr-2", loading && "animate-spin")} />
+              Sync
+            </Button>
+            <Button size="sm" onClick={handleCreateNew} className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl h-9 px-4 font-black uppercase tracking-widest text-[10px]">
+              <Plus size={16} className="mr-2" />
+              Create
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <TabsList className="bg-muted/20 p-1 rounded-2xl h-12">
+              <TabsTrigger value="my-scripts" className="rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-sm px-6 font-black uppercase tracking-widest text-[10px]">
+                My Scripts
+              </TabsTrigger>
+              <TabsTrigger value="shared" className="rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-sm px-6 font-black uppercase tracking-widest text-[10px]">
+                Marketplace
+              </TabsTrigger>
+            </TabsList>
             
-            <TabsContent value="shared" className="m-0">
-               <Table>
-                <TableHeader className="bg-muted/30">
-                  <TableRow className="hover:bg-transparent border-border">
-                    <TableHead className="font-black uppercase tracking-widest text-[10px] py-4 pl-8">Name</TableHead>
-                    <TableHead className="font-black uppercase tracking-widest text-[10px]">Language</TableHead>
-                    <TableHead className="font-black uppercase tracking-widest text-[10px]">Category</TableHead>
-                    <TableHead className="font-black uppercase tracking-widest text-[10px]">OS</TableHead>
-                    <TableHead className="font-black uppercase tracking-widest text-[10px] text-right pr-8">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="h-32 text-center">
-                        <RefreshCw className="animate-spin mx-auto text-primary" size={24} />
-                      </TableCell>
-                    </TableRow>
-                  ) : sharedScripts.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="h-32 text-center text-muted-foreground font-bold uppercase tracking-widest text-[10px]">
-                        Community shared library is empty or unavailable
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    sharedScripts.map((script) => (
-                      <TableRow key={script.id} className="group border-border hover:bg-muted/20 transition-colors">
-                        <TableCell className="py-4 pl-8">
-                          <div className="flex items-center gap-4">
-                            <div className="p-2.5 bg-muted text-muted-foreground rounded-xl border border-border group-hover:bg-primary/5 group-hover:text-primary group-hover:border-primary/20 transition-all">
-                              <Globe size={20} />
-                            </div>
-                            <div>
-                              <p className="text-sm font-black text-foreground">{script.name}</p>
-                              <p className="text-[10px] text-muted-foreground font-medium line-clamp-1 max-w-[300px]">{script.description}</p>
-                            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+                <Input 
+                  placeholder="Filter scripts..." 
+                  className="pl-9 h-10 w-full md:w-48 rounded-xl bg-muted/20 border-border font-bold text-xs"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+              </div>
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger className="h-10 w-32 rounded-xl border-border bg-muted/20 font-bold text-[10px] uppercase tracking-widest">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="all">All</SelectItem>
+                  {(categories as string[]).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <TabsContent value="my-scripts" className="m-0 outline-none">
+            {loading ? (
+              <div className="py-24 text-center">
+                <RefreshCw className="animate-spin mx-auto text-primary mb-4" size={32} />
+                <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Loading scripts...</p>
+              </div>
+            ) : filteredScripts.length === 0 ? (
+              <div className="py-24 text-center border-2 border-dashed border-border rounded-3xl">
+                <FileCode2 className="mx-auto text-muted-foreground/20 mb-4" size={48} />
+                <p className="text-sm font-black uppercase tracking-widest text-muted-foreground">No matching scripts found</p>
+                <Button variant="link" onClick={handleCreateNew} className="mt-2 text-primary uppercase text-[10px] font-black">Create your first script</Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredScripts.map((script) => (
+                  <motion.div
+                    layout
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    key={script.id}
+                  >
+                    <Card className="border-none shadow-sm hover:shadow-md transition-all duration-300 rounded-3xl overflow-hidden group bg-card border border-border/50">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div className={cn(
+                            "p-3 rounded-2xl transition-colors",
+                            script.language === 'powershell' ? "bg-blue-500/10 text-blue-500" : 
+                            script.language === 'bash' ? "bg-zinc-500/10 text-zinc-500" : "bg-amber-500/10 text-amber-500"
+                          )}>
+                            <FileCode2 size={24} />
                           </div>
-                        </TableCell>
-                        <TableCell>
-                           <Badge variant="outline" className="rounded-lg font-black uppercase text-[9px] tracking-widest border-border text-muted-foreground">
-                            {script.language === 'powershell' ? 'PS1' : (script.language === 'bash' ? 'SH' : 'PY')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{script.category}</span>
-                        </TableCell>
-                        <TableCell>
                           <div className="flex gap-1">
                             {script.targetOs.map(os => (
-                              <div key={os} title={os} className="p-1 rounded bg-muted/50">
-                                <Monitor size={10} className="text-muted-foreground" />
+                              <div key={os} className="p-1.5 bg-muted/50 rounded-lg" title={os}>
+                                <Monitor size={12} className="text-muted-foreground" />
                               </div>
                             ))}
                           </div>
-                        </TableCell>
-                        <TableCell className="text-right pr-8">
+                        </div>
+                        <div className="mt-4">
+                          <h4 className="text-lg font-black text-foreground tracking-tight group-hover:text-primary transition-colors">{script.name}</h4>
+                          <p className="text-xs text-muted-foreground font-medium line-clamp-2 mt-1 min-h-[32px]">{script.description}</p>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">Lang:</span>
+                            <span className="text-foreground">{script.language === 'powershell' ? 'PS1' : (script.language === 'bash' ? 'SH' : 'PY')}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">Runs:</span>
+                            <span className="text-foreground">{script.runCount || 0}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+                          <Button 
+                            onClick={() => {
+                              setRunningScript(script);
+                              const fetchDevices = async () => {
+                                const idToken = await auth.currentUser?.getIdToken();
+                                if (!idToken) return;
+                                const res = await fetch('/api/agent/devices', { headers: { 'Authorization': `Bearer ${idToken}` } });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setDevices(data.filter((d: any) => d.status === 'online'));
+                                }
+                              };
+                              fetchDevices();
+                            }}
+                            className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl h-10 font-black uppercase text-[10px] tracking-widest"
+                          >
+                            <Play size={14} className="mr-2" />
+                            Run
+                          </Button>
                           <Button 
                             variant="outline" 
-                            size="sm" 
-                            onClick={() => handleClone(script.id, true)} 
-                            className="rounded-xl font-bold uppercase text-[9px] tracking-widest h-8 px-4 border-primary text-primary hover:bg-primary/5"
+                            size="icon" 
+                            onClick={() => setEditingScript(script)}
+                            className="w-10 h-10 rounded-xl border-border text-muted-foreground hover:text-primary hover:bg-primary/5"
                           >
-                            <Copy size={12} className="mr-2" />
-                            Clone To library
+                            <Edit size={16} />
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TabsContent>
-          </CardContent>
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            onClick={() => handleDelete(script.id)}
+                            className="w-10 h-10 rounded-xl border-border text-muted-foreground hover:text-rose-500 hover:bg-rose-50"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="shared" className="m-0 outline-none">
+             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {sharedScripts.map((script) => (
+                   <Card key={script.id} className="border-none shadow-sm rounded-3xl overflow-hidden group bg-card border border-border/50">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="p-3 rounded-2xl bg-primary/5 text-primary">
+                          <Globe size={24} />
+                        </div>
+                        <Badge className="bg-primary/10 text-primary border-none text-[9px] font-black uppercase">Community</Badge>
+                      </div>
+                      <div className="mt-4">
+                        <h4 className="text-lg font-black text-foreground tracking-tight">{script.name}</h4>
+                        <p className="text-xs text-muted-foreground font-medium line-clamp-2 mt-1 min-h-[32px]">{script.description}</p>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                        <span>{script.language === 'powershell' ? 'PowerShell' : (script.language === 'bash' ? 'Bash' : 'Python')}</span>
+                        <span>•</span>
+                        <span>{script.targetOs.join(', ')}</span>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => handleClone(script.id, true)} 
+                        className="w-full rounded-xl h-10 font-black uppercase text-[10px] tracking-widest border-primary text-primary hover:bg-primary/5"
+                      >
+                        <Copy size={14} className="mr-2" />
+                        Clone to Library
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+                {sharedScripts.length === 0 && !loading && (
+                   <div className="col-span-full py-24 text-center border-2 border-dashed border-border rounded-3xl">
+                      <Globe className="mx-auto text-muted-foreground/20 mb-4" size={48} />
+                      <p className="text-sm font-black uppercase tracking-widest text-muted-foreground">Marketplace currently unavailable</p>
+                   </div>
+                )}
+             </div>
+          </TabsContent>
         </Tabs>
-      </Card>
+      </div>
 
       {/* Run Script Dialog */}
       <Dialog open={!!runningScript} onOpenChange={open => !open && setRunningScript(null)}>

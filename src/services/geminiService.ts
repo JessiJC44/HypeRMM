@@ -14,15 +14,15 @@ export async function generateAIResponse(prompt: string, systemInstruction?: str
   }
 
   try {
-    const response = await ai.models.generateContent({
+    const model = ai.getGenerativeModel({
       model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: {
-        systemInstruction: systemInstruction || "You are a helpful IT Management Assistant for the HypeRemote platform. You help IT administrators manage devices, tickets, and system alerts. Keep your answers concise and professional.",
-      },
+      systemInstruction: systemInstruction || "You are a helpful IT Management Assistant for the HypeRemote platform. You help IT administrators manage devices, tickets, and system alerts. Keep your answers concise and professional.",
     });
 
-    return response.text || "I'm sorry, I couldn't generate a response.";
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    return text || "I'm sorry, I couldn't generate a response.";
   } catch (error) {
     console.error("Gemini API Error:", error);
     throw error;
