@@ -29,7 +29,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
-import { auth } from '../lib/firebase';
+import { generateScript } from '../services/geminiService';
+import { auth, db } from '../lib/firebase';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface Script {
@@ -206,29 +207,16 @@ export function Scripts({ hideHeader = false }: { hideHeader?: boolean }) {
     if (!aiPrompt) return;
     setIsGenerating(true);
     try {
-      const idToken = await auth.currentUser?.getIdToken();
-      const res = await fetch('/api/scripts/ai-generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({
-          description: aiPrompt,
-          language: editingScript?.language,
-          targetOs: editingScript?.targetOs?.[0] || 'windows'
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setEditingScript(prev => ({ ...prev, content: data.content }));
-        toast.success('Script generated!');
-      } else {
-        toast.error('AI generation failed');
-      }
+      const content = await generateScript(
+        aiPrompt, 
+        editingScript?.language || 'powershell', 
+        editingScript?.targetOs?.[0] || 'windows'
+      );
+      setEditingScript(prev => ({ ...prev, content }));
+      toast.success('Script generated!');
     } catch (error) {
-      toast.error('Error connecting to AI service');
+      toast.error('AI generation failed');
+      console.error(error);
     } finally {
       setIsGenerating(false);
     }

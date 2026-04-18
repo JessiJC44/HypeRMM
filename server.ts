@@ -448,32 +448,58 @@ async function startServer() {
     }
   });
 
-  app.post("/api/scripts/ai-generate", verifyFirebaseToken, async (req: any, res) => {
+  // === Network Discovery API ===
+
+  app.get("/api/network/status", verifyFirebaseToken, async (req: any, res) => {
     try {
-      const { description, language, targetOs } = req.body;
-      
-      if (!process.env.GEMINI_API_KEY) {
-        return res.status(500).json({ error: "Gemini API key not configured" });
-      }
-      
-      const genAI = new (await import("@google/genai")).GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "missing" });
-      const response = await genAI.models.generateContent({ 
-        model: "gemini-3-flash-preview",
-        contents: description,
-        config: {
-          systemInstruction: `You are an expert IT administrator. Generate a ${language} script for ${targetOs} that does: ${description}. Return ONLY the script code, no explanations, no markdown code blocks. The script must be safe, idempotent if possible, and include basic error handling. Use variables like {variable_name} for values that should be configurable.`
-        }
+      const { uid } = req.user;
+      const userDoc = await firestore.collection('users').doc(uid).get();
+      res.json({ 
+        permissionsGranted: userDoc.data()?.networkPermissionsGranted || false 
       });
-      
-      let text = response.text || "";
-      
-      // Clean up common markdown if model ignored the instruction
-      text = text.replace(/^```[a-z]*\n/i, "").replace(/\n```$/i, "");
-      
-      res.json({ content: text });
     } catch (error) {
-      console.error("❌ AI script generation error:", error);
-      res.status(500).json({ error: "Failed to generate AI script" });
+      res.status(500).json({ error: "Failed to fetch network status" });
+    }
+  });
+
+  app.post("/api/network/grant-permission", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      await firestore.collection('users').doc(uid).update({
+        networkPermissionsGranted: true,
+        networkPermissionsTimestamp: FieldValue.serverTimestamp()
+      });
+      res.json({ status: "granted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to grant permission" });
+    }
+  });
+
+  app.get("/api/network/discover", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      
+      // Verify permission
+      const userDoc = await firestore.collection('users').doc(uid).get();
+      if (!userDoc.data()?.networkPermissionsGranted) {
+        return res.status(403).json({ error: "Network permission not granted" });
+      }
+
+      // In a real environment, we might use tools like nmap or child_process to ping.
+      // Here we simulate a realistic scan result.
+      // We'll generate a few random devices on a simulated subnet.
+      const devices = [
+        { name: 'SRV-DOMAIN-01', ip: '192.168.1.10', type: 'Server', mfg: 'Dell', os: 'Windows Server 2022', mac: '00:15:5D:01:23:45' },
+        { name: 'PRINTER-HR', ip: '192.168.1.25', type: 'Printer', mfg: 'HP', os: 'Embedded', mac: '3C:D9:2B:A1:B2:C3' },
+        { name: 'DESKTOP-DEV-04', ip: '192.168.1.102', type: 'Workstation', mfg: 'Lenovo', os: 'Windows 11', mac: '54:EE:75:88:99:AA' },
+        { name: 'MACBOOK-M3-PRO', ip: '192.168.1.55', type: 'Laptop', mfg: 'Apple', os: 'macOS 14.2', mac: '60:03:08:BB:CC:DD' },
+        { name: 'UBUNTU-DEB-01', ip: '192.168.1.200', type: 'Server', mfg: 'Generic', os: 'Ubuntu 22.04 LTS', mac: '08:00:27:EE:FF:00' }
+      ];
+
+      res.json(devices);
+    } catch (error) {
+      console.error("❌ Network discovery error:", error);
+      res.status(500).json({ error: "Failed to perform network discovery" });
     }
   });
 

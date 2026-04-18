@@ -10,21 +10,47 @@ if (API_KEY && API_KEY !== "MY_GEMINI_API_KEY") {
 
 export async function generateAIResponse(prompt: string, systemInstruction?: string) {
   if (!ai) {
-    throw new Error("Gemini API key is not configured. Please add GEMINI_API_KEY to your environment variables.");
+    throw new Error("Gemini API key is not configured.");
   }
 
   try {
-    const model = ai.getGenerativeModel({
-      model: "gemini-3-flash-preview",
-      systemInstruction: systemInstruction || "You are a helpful IT Management Assistant for the HypeRemote platform. You help IT administrators manage devices, tickets, and system alerts. Keep your answers concise and professional.",
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-latest",
+      contents: prompt,
+      config: {
+        systemInstruction: systemInstruction || "You are a helpful IT Management Assistant for the HypeRemote platform. You help IT administrators manage devices, tickets, and system alerts. Keep your answers concise and professional.",
+      },
     });
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-
-    return text || "I'm sorry, I couldn't generate a response.";
+    return response.text || "I'm sorry, I couldn't generate a response.";
   } catch (error) {
     console.error("Gemini API Error:", error);
+    throw error;
+  }
+}
+
+export async function generateScript(description: string, language: string, targetOs: string) {
+  if (!ai) {
+    throw new Error("Gemini API key is not configured.");
+  }
+
+  const prompt = `Generate a ${language} script for ${targetOs} that does: ${description}. Return ONLY the script code, no explanations, no markdown code blocks. The script must be safe, idempotent if possible, and include basic error handling. Use variables like {variable_name} for values that should be configurable.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-latest",
+      contents: prompt,
+      config: {
+        systemInstruction: "You are an expert IT administrator and script developer.",
+      },
+    });
+
+    let text = response.text || "";
+    // Clean up markdown if model ignored the instruction
+    text = text.replace(/^```[a-z]*\n/i, "").replace(/\n```$/i, "");
+    return text;
+  } catch (error) {
+    console.error("Script Generation Error:", error);
     throw error;
   }
 }

@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { motion, AnimatePresence } from 'motion/react';
-import { generateAIResponse } from '@/src/services/geminiService';
+import { generateAIResponse } from '../services/geminiService';
 import { ChatMessage } from '@/src/types';
 import { toast } from 'sonner';
 

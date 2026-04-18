@@ -25,23 +25,25 @@ export function getBiometricMethod(): string {
     const h = window.screen.height;
     const maxDim = Math.max(w, h);
     
-    // Modern iPad Pro (Face ID) resolutions (logic points)
-    // 11-inch: 1194 or 1210
-    // 12.9-inch / 13-inch: 1366 or 1376
-    const faceIdModels = [1194, 1210, 1366, 1376];
+    // Modern iPad Pro (Face ID only) resolutions (logic points)
+    // 11-inch: 1194, 1210
+    // 12.9-inch / 13-inch: 1366, 1376
+    const faceIdOnlyModels = [1194, 1210, 1366, 1376];
     
-    if (faceIdModels.includes(maxDim)) {
+    if (faceIdOnlyModels.includes(maxDim)) {
       return 'Face ID';
     }
-    // Most other iPads (Air, Mini, Base) use Touch ID locally
+    
+    // Default to Touch ID for Air, Mini and entry-level iPads 
+    // (which have Touch ID via Top button or Home button)
     return 'Touch ID';
   }
   
   if (isMac) return 'Touch ID';
   if (/Windows/.test(ua)) return 'Windows Hello';
-  if (/Android/.test(ua)) return 'Biometrics';
+  if (/Android/.test(ua)) return 'Biométrie Android';
   
-  return 'Platform Authenticator';
+  return 'Authentification Biométrique';
 }
 
 /**
