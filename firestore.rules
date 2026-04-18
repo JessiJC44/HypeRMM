@@ -129,6 +129,16 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create, update, delete: if isAdmin();
     }
+
+    match /network_scans/{scanId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /network_scan_results/{resultId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create, update, delete: if false;
+    }
     
     // Legacy mapping if needed for older migrations
     match /agent_enrollments/{tokenHash} {

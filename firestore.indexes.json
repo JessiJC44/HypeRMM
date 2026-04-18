@@ -72,6 +72,31 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "startedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "network_scans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "startedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "network_scan_results",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "scanId", "order": "ASCENDING" },
+        { "fieldPath": "ipAddress", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "network_scan_results",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "discoveredAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

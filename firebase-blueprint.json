@@ -194,6 +194,48 @@
         "exitCode": { "type": "number" }
       },
       "required": ["userId", "scriptId", "deviceId", "status", "startedAt"]
+    },
+    "NetworkScan": {
+      "title": "NetworkScan",
+      "description": "A local network scan session performed by a proxy agent.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "proxyAgentId": { "type": "string" },
+        "proxyAgentName": { "type": "string" },
+        "siteId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "running", "completed", "failed", "cancelled"] },
+        "subnet": { "type": "string" },
+        "scanTypes": { "type": "array", "items": { "type": "string", "enum": ["ping", "arp", "mdns", "portscan"] } },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "devicesFound": { "type": "number" },
+        "error": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["userId", "proxyAgentId", "status", "startedAt"]
+    },
+    "NetworkScanResult": {
+      "title": "NetworkScanResult",
+      "description": "Individual device discovered during a network scan.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "scanId": { "type": "string" },
+        "ipAddress": { "type": "string" },
+        "macAddress": { "type": "string" },
+        "hostname": { "type": "string" },
+        "osGuess": { "type": "string" },
+        "openPorts": { "type": "array", "items": { "type": "number" } },
+        "deviceType": { "type": "string", "enum": ["computer", "printer", "router", "switch", "iot", "unknown"] },
+        "vendor": { "type": "string" },
+        "responseTimeMs": { "type": "number" },
+        "isManaged": { "type": "boolean" },
+        "discoveredAt": { "type": "string", "format": "date-time" },
+        "invitationSent": { "type": "boolean" },
+        "invitationSentAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "scanId", "ipAddress", "isManaged", "discoveredAt"]
     }
   },
   "firestore": {
@@ -248,6 +290,14 @@
     "/shared_scripts/{scriptId}": {
       "schema": "Script",
       "description": "Community shared script library (Read Only for non-admins)"
+    },
+    "/network_scans/{scanId}": {
+      "schema": "NetworkScan",
+      "description": "Network discovery scans"
+    },
+    "/network_scan_results/{resultId}": {
+      "schema": "NetworkScanResult",
+      "description": "Devices found in network scans"
     }
   }
 }

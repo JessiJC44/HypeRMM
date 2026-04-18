@@ -66,6 +66,7 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, onClose, user }: Side
     { id: 'assets', label: t('nav.assets'), icon: Monitor, description: 'Inventaire et gestion à distance de tous les terminaux.' },
     { id: 'alerts', label: t('nav.alerts'), icon: Bell, description: 'Notifications en temps réel des événements système critiques.', badge: alertCount > 0 ? alertCount.toString() : undefined },
     { id: 'patches', label: t('nav.patches'), icon: ShieldCheck, description: 'Mises à jour automatisées du système d\'exploitation et des logiciels tiers.' },
+    { id: 'scripts', label: t('nav.scripts'), icon: FileCode2, description: 'Bibliothèque de scripts d\'automatisation (PowerShell, Bash, Python).' },
     { id: 'software', label: t('nav.software'), icon: Package, description: 'Suivre les logiciels installés et la conformité des licences.' },
     { id: 'app-center', label: t('nav.app-center'), icon: AppWindow, description: 'Intégrations et place de marché pour les outils tiers.' },
     { id: 'network', label: t('nav.network'), icon: Search, description: 'Scanner et cartographier les appareils sur le réseau local.' },

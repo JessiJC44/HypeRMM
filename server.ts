@@ -450,58 +450,223 @@ async function startServer() {
 
   // === Network Discovery API ===
 
-  app.get("/api/network/status", verifyFirebaseToken, async (req: any, res) => {
+  app.get("/api/network/proxy-candidates", verifyFirebaseToken, async (req: any, res) => {
     try {
       const { uid } = req.user;
-      const userDoc = await firestore.collection('users').doc(uid).get();
-      res.json({ 
-        permissionsGranted: userDoc.data()?.networkPermissionsGranted || false 
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch network status" });
-    }
-  });
-
-  app.post("/api/network/grant-permission", verifyFirebaseToken, async (req: any, res) => {
-    try {
-      const { uid } = req.user;
-      await firestore.collection('users').doc(uid).update({
-        networkPermissionsGranted: true,
-        networkPermissionsTimestamp: FieldValue.serverTimestamp()
-      });
-      res.json({ status: "granted" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to grant permission" });
-    }
-  });
-
-  app.get("/api/network/discover", verifyFirebaseToken, async (req: any, res) => {
-    try {
-      const { uid } = req.user;
+      const snapshot = await firestore.collection('devices')
+        .where('userId', '==', uid)
+        .where('status', '==', 'online')
+        .get();
       
-      // Verify permission
-      const userDoc = await firestore.collection('users').doc(uid).get();
-      if (!userDoc.data()?.networkPermissionsGranted) {
-        return res.status(403).json({ error: "Network permission not granted" });
+      const candidates = snapshot.docs
+        .map((doc: any) => ({ id: doc.id, ...doc.data() }))
+        .filter((d: any) => ['Windows', 'Linux', 'macOS'].some(os => d.os?.includes(os)));
+        
+      res.json(candidates);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch proxy candidates" });
+    }
+  });
+
+  app.post("/api/network/scan", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      const { proxyAgentId, scanTypes = ['ping', 'arp', 'mdns', 'portscan'], customSubnet = null } = req.body;
+      
+      const deviceDoc = await firestore.collection('devices').doc(proxyAgentId).get();
+      if (!deviceDoc.exists || deviceDoc.data()?.userId !== uid || deviceDoc.data()?.status !== 'online') {
+        return res.status(400).json({ error: "Invalid or offline proxy agent" });
       }
 
-      // In a real environment, we might use tools like nmap or child_process to ping.
-      // Here we simulate a realistic scan result.
-      // We'll generate a few random devices on a simulated subnet.
-      const devices = [
-        { name: 'SRV-DOMAIN-01', ip: '192.168.1.10', type: 'Server', mfg: 'Dell', os: 'Windows Server 2022', mac: '00:15:5D:01:23:45' },
-        { name: 'PRINTER-HR', ip: '192.168.1.25', type: 'Printer', mfg: 'HP', os: 'Embedded', mac: '3C:D9:2B:A1:B2:C3' },
-        { name: 'DESKTOP-DEV-04', ip: '192.168.1.102', type: 'Workstation', mfg: 'Lenovo', os: 'Windows 11', mac: '54:EE:75:88:99:AA' },
-        { name: 'MACBOOK-M3-PRO', ip: '192.168.1.55', type: 'Laptop', mfg: 'Apple', os: 'macOS 14.2', mac: '60:03:08:BB:CC:DD' },
-        { name: 'UBUNTU-DEB-01', ip: '192.168.1.200', type: 'Server', mfg: 'Generic', os: 'Ubuntu 22.04 LTS', mac: '08:00:27:EE:FF:00' }
-      ];
+      const scanRef = await firestore.collection('network_scans').add({
+        userId: uid,
+        proxyAgentId,
+        proxyAgentName: deviceDoc.data()?.name || 'Unknown',
+        siteId: deviceDoc.data()?.siteId || null,
+        status: 'pending',
+        subnet: customSubnet || '',
+        scanTypes,
+        startedAt: FieldValue.serverTimestamp(),
+        completedAt: null,
+        devicesFound: 0,
+        error: null,
+        createdBy: uid
+      });
 
-      res.json(devices);
+      // Insert command for the agent
+      await firestore.collection('commands').add({
+        deviceId: proxyAgentId,
+        userId: uid,
+        type: 'network_scan',
+        payload: JSON.stringify({ scanId: scanRef.id, scanTypes, subnet: customSubnet }),
+        status: 'pending',
+        createdAt: FieldValue.serverTimestamp()
+      });
+
+      res.json({ scanId: scanRef.id, status: 'pending' });
     } catch (error) {
-      console.error("❌ Network discovery error:", error);
-      res.status(500).json({ error: "Failed to perform network discovery" });
+      console.error("❌ Scan start error:", error);
+      res.status(500).json({ error: "Failed to start network scan" });
     }
   });
+
+  app.get("/api/network/scans", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      const snapshot = await firestore.collection('network_scans')
+        .where('userId', '==', uid)
+        .orderBy('startedAt', 'desc')
+        .limit(20)
+        .get();
+      
+      const scans = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      res.json(scans);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch scans" });
+    }
+  });
+
+  app.get("/api/network/scans/:scanId", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      const { scanId } = req.params;
+      
+      const scanDoc = await firestore.collection('network_scans').doc(scanId).get();
+      if (!scanDoc.exists || scanDoc.data()?.userId !== uid) {
+        return res.status(404).json({ error: "Scan not found" });
+      }
+
+      const resultsSnapshot = await firestore.collection('network_scan_results')
+        .where('userId', '==', uid)
+        .where('scanId', '==', scanId)
+        .get();
+      
+      const results = resultsSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      res.json({ scan: { id: scanDoc.id, ...scanDoc.data() }, results });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch scan details" });
+    }
+  });
+
+  app.post("/api/network/scans/:scanId/cancel", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      const { scanId } = req.params;
+      
+      const scanDoc = await firestore.collection('network_scans').doc(scanId).get();
+      if (!scanDoc.exists || scanDoc.data()?.userId !== uid) {
+        return res.status(404).json({ error: "Scan not found" });
+      }
+
+      await firestore.collection('network_scans').doc(scanId).update({
+        status: 'cancelled',
+        completedAt: FieldValue.serverTimestamp()
+      });
+
+      res.json({ status: "cancelled" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to cancel scan" });
+    }
+  });
+
+  app.post("/api/network/results/:resultId/send-invitation", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      const { resultId } = req.params;
+      const { email, message } = req.body;
+      
+      const resultDoc = await firestore.collection('network_scan_results').doc(resultId).get();
+      if (!resultDoc.exists || resultDoc.data()?.userId !== uid) {
+        return res.status(404).json({ error: "Result not found" });
+      }
+
+      // Here you would normally use a mail service like Resend.
+      // Since Resend isn't configured, we'll log it and update Firestore.
+      console.log(`📧 Sending invitation to ${email} for device ${resultDoc.data()?.ipAddress}`);
+      console.log(`Message: ${message || 'No custom message'}`);
+      
+      await firestore.collection('network_scan_results').doc(resultId).update({
+        invitationSent: true,
+        invitationSentAt: FieldValue.serverTimestamp()
+      });
+
+      res.json({ status: "sent" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send invitation" });
+    }
+  });
+
+  app.post("/api/agent/network-scan-result", verifyAgentJWT, async (req: any, res) => {
+    try {
+      const { deviceId } = req.agent;
+      const { scanId, subnet, results, error } = req.body;
+      
+      const scanDoc = await firestore.collection('network_scans').doc(scanId).get();
+      if (!scanDoc.exists) return res.status(404).json({ error: "Scan not found" });
+      
+      const scanData = scanDoc.data()!;
+      if (scanData.proxyAgentId !== deviceId) return res.status(403).json({ error: "Unauthorized proxy agent" });
+      
+      if (scanData.status === 'cancelled') return res.status(409).json({ error: "Scan was cancelled" });
+      if (scanData.status !== 'pending' && scanData.status !== 'running') return res.status(400).json({ error: "Scan is not in a submittable state" });
+
+      if (error) {
+        await firestore.collection('network_scans').doc(scanId).update({
+          status: 'failed',
+          error,
+          completedAt: FieldValue.serverTimestamp()
+        });
+        return res.json({ status: "recorded_error" });
+      }
+
+      const userId = scanData.userId;
+      const batch = firestore.batch();
+
+      for (const result of results) {
+        const resultRef = firestore.collection('network_scan_results').doc();
+        
+        // Check if managed
+        const managedQuery = await firestore.collection('devices')
+          .where('userId', '==', userId)
+          .where('ip', '==', result.ipAddress)
+          .get();
+        
+        const isManaged = !managedQuery.empty;
+
+        batch.set(resultRef, {
+          userId,
+          scanId,
+          ipAddress: result.ipAddress,
+          macAddress: result.macAddress || null,
+          hostname: result.hostname || null,
+          osGuess: result.osGuess || null,
+          openPorts: result.openPorts || [],
+          deviceType: result.deviceType || 'unknown',
+          vendor: result.vendor || null,
+          responseTimeMs: result.responseTimeMs || null,
+          isManaged,
+          discoveredAt: FieldValue.serverTimestamp(),
+          invitationSent: false,
+          invitationSentAt: null
+        });
+      }
+
+      await firestore.collection('network_scans').doc(scanId).update({
+        status: 'completed',
+        completedAt: FieldValue.serverTimestamp(),
+        devicesFound: results.length,
+        subnet
+      });
+
+      await batch.commit();
+      res.json({ status: "success" });
+    } catch (error) {
+      console.error("❌ Agent scan result error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // === Scripts API ===
 
   app.get("/api/scripts/:id", verifyFirebaseToken, async (req: any, res) => {
     try {
