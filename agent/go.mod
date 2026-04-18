@@ -2,7 +2,12 @@ module hyperemote-agent
 
 go 1.21
 
-require github.com/shirou/gopsutil/v3 v3.23.12
+require (
+	github.com/go-ping/ping v1.1.0
+	github.com/grandcat/zeroconf v1.0.0
+	github.com/j-keck/arping v1.0.3
+	github.com/shirou/gopsutil/v3 v3.23.12
+)
 
 require (
 	github.com/go-ole/go-ole v1.2.6 // indirect

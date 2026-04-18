@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/src/lib/utils';
+import { useLanguage } from '../contexts/LanguageContext';
 import { 
   getProxyCandidates, 
   startNetworkScan, 
@@ -60,6 +61,7 @@ interface ScanSession {
 }
 
 export function NetworkDiscovery() {
+  const { t } = useLanguage();
   const [scans, setScans] = useState<ScanSession[]>([]);
   const [currentScanId, setCurrentScanId] = useState<string | null>(null);
   const [results, setResults] = useState<ScanResult[]>([]);
@@ -98,7 +100,7 @@ export function NetworkDiscovery() {
         handleViewScan(activeScan.id);
       }
     } catch (error) {
-      toast.error("Failed to load network discovery data");
+      toast.error(t('common.error_loading') || "Failed to load network discovery data");
     } finally {
       setIsLoading(false);
     }
@@ -106,13 +108,13 @@ export function NetworkDiscovery() {
 
   const handleStartScan = async () => {
     if (!selectedProxy) {
-      toast.error("Please select a proxy agent");
+      toast.error(t('network.select_proxy'));
       return;
     }
 
     try {
       const response = await startNetworkScan(selectedProxy, scanTypes, customSubnet || undefined);
-      toast.success("Network scan initiated via proxy agent");
+      toast.success(t('network.scanning'));
       setShowNewScanModal(false);
       
       // Refresh scans list and trigger detail view
@@ -146,29 +148,29 @@ export function NetworkDiscovery() {
         }, 3000);
       }
     } catch (error) {
-      toast.error("Failed to fetch scan details");
+      toast.error(t('common.error_details') || "Failed to fetch scan details");
     }
   };
 
   const handleCancelScan = async (scanId: string) => {
     try {
       await cancelScan(scanId);
-      toast.info("Scan cancellation requested");
+      toast.info(t('network.scan_cancelled'));
       if (pollingRef.current) clearInterval(pollingRef.current);
       await fetchInitialData();
     } catch (error) {
-      toast.error("Failed to cancel scan");
+      toast.error(t('common.error_cancel') || "Failed to cancel scan");
     }
   };
 
   const handleSendInvitation = async (resultId: string, email: string) => {
     try {
       await sendInvitation(resultId, email);
-      toast.success("Invitation link sent successfully");
+      toast.success(t('network.invitation_sent'));
       // Update results UI
       setResults(prev => prev.map(r => r.id === resultId ? { ...r, invitationSent: true } : r));
     } catch (error) {
-      toast.error("Failed to send invitation");
+      toast.error(t('common.error_invitation') || "Failed to send invitation");
     }
   };
 
@@ -184,17 +186,17 @@ export function NetworkDiscovery() {
               <div className="p-2 bg-indigo-50 rounded-lg">
                 <Search className="w-5 h-5 text-indigo-600" />
               </div>
-              <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Network Discovery</h1>
+              <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">{t('network.title')}</h1>
             </div>
             <p className="text-slate-500 text-sm max-w-2xl">
-              Scan local networks using your managed agents. Discover computers, printers, and servers to expand your management reach.
+              {t('network.subtitle')}
             </p>
           </div>
           <div className="flex items-center gap-3">
              <button
               onClick={() => {
                 if (proxyCandidates.length === 0) {
-                  toast.error("No online Windows/Linux agents available to act as proxy");
+                  toast.error(t('network.no_proxy_available'));
                 } else {
                   setShowNewScanModal(true);
                 }
@@ -202,7 +204,7 @@ export function NetworkDiscovery() {
               className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-medium shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-[0.98]"
             >
               <Plus className="w-4 h-4" />
-              Nouveau Scan
+              {t('network.start_scan')}
             </button>
             <button 
               onClick={fetchInitialData}
@@ -221,12 +223,12 @@ export function NetworkDiscovery() {
           <div className="lg:col-span-3 flex flex-col gap-4">
             <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider px-1 flex items-center gap-2">
               <Clock className="w-4 h-4" />
-              Scans Récents
+              {t('network.scan_history')}
             </h2>
             <div className="flex flex-col gap-2">
               {scans.length === 0 ? (
                 <div className="p-8 text-center bg-white rounded-2xl border border-dashed text-slate-400 text-sm">
-                  Aucun scan trouvé
+                  {t('common.no_data') || "Aucun scan trouvé"}
                 </div>
               ) : (
                 scans.map((scan) => (
@@ -247,7 +249,7 @@ export function NetworkDiscovery() {
                       <StatusBadge status={scan.status} />
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-slate-500">
-                      <span>{scan.subnet || 'Auto-SN'}</span>
+                      <span>{scan.subnet || t('network.auto_detect')}</span>
                       <span className="flex items-center gap-1">
                         <Monitor className="w-3 h-3" />
                         {scan.devicesFound}
@@ -266,9 +268,9 @@ export function NetworkDiscovery() {
                 <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
                   <Globe className="w-10 h-10 text-indigo-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-slate-900 mb-2">Sélectionnez un scan</h3>
+                <h3 className="text-xl font-semibold text-slate-900 mb-2">{t('network.empty_title')}</h3>
                 <p className="text-slate-500 max-w-sm">
-                  Choisissez un scan dans la liste latérale ou lancez-en un nouveau pour commencer à découvrir des appareils sur le réseau.
+                  {t('network.empty_desc')}
                 </p>
               </div>
             ) : (
@@ -291,17 +293,17 @@ export function NetworkDiscovery() {
                       </div>
                       <div>
                         <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                          Scan via {activeScan.proxyAgentName}
+                          {t('network.proxy_agent')}: {activeScan.proxyAgentName}
                           <StatusBadge status={activeScan.status} />
                         </h2>
                         <div className="flex items-center gap-4 text-sm text-slate-500 mt-0.5">
                           <span className="flex items-center gap-1">
                             <Network className="w-4 h-4" />
-                            {activeScan.subnet || 'Détection automatique'}
+                            {activeScan.subnet || t('network.auto_detect')}
                           </span>
                           <span className="flex items-center gap-1">
                             <Search className="w-4 h-4" />
-                            Discovered: {activeScan.devicesFound}
+                            {t('network.results_count')}: {activeScan.devicesFound}
                           </span>
                         </div>
                       </div>
@@ -311,7 +313,7 @@ export function NetworkDiscovery() {
                         onClick={() => handleCancelScan(activeScan.id)}
                         className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl text-sm font-medium transition-colors"
                       >
-                        Annuler le scan
+                        {t('network.cancel_scan')}
                       </button>
                     )}
                   </div>
@@ -320,9 +322,9 @@ export function NetworkDiscovery() {
                 {/* Results Table */}
                 <div className="bg-white rounded-3xl border shadow-sm border-slate-100 overflow-hidden">
                   <div className="px-6 py-4 border-b bg-slate-50/50 flex items-center justify-between">
-                    <h3 className="font-semibold text-slate-800">Appareils Découverts</h3>
+                    <h3 className="font-semibold text-slate-800">{t('nav.assets')}</h3>
                     <span className="text-xs font-medium text-slate-500 bg-white px-2.5 py-1 rounded-full border shadow-sm">
-                      {results.length} Total
+                      {results.length} {t('network.results_count')}
                     </span>
                   </div>
                   
@@ -331,9 +333,9 @@ export function NetworkDiscovery() {
                       <div className="mb-4 inline-flex items-center justify-center w-12 h-12 bg-slate-50 rounded-full">
                         <Monitor className="w-6 h-6" />
                       </div>
-                      <p>Aucun appareil détecté pour le moment.</p>
+                      <p>{t('network.no_devices_found')}</p>
                       {activeScan.status === 'running' && (
-                        <p className="text-sm mt-1 animate-pulse text-indigo-500">Scan en cours d'exécution...</p>
+                        <p className="text-sm mt-1 animate-pulse text-indigo-500">{t('network.scanning')}</p>
                       )}
                     </div>
                   ) : (
@@ -341,7 +343,7 @@ export function NetworkDiscovery() {
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/30">
-                            <th className="px-6 py-4">Appareil</th>
+                            <th className="px-6 py-4">{t('common.device') || "Appareil"}</th>
                             <th className="px-6 py-4">IP / MAC</th>
                             <th className="px-6 py-4">Status</th>
                             <th className="px-6 py-4 text-right">Actions</th>
@@ -385,7 +387,7 @@ export function NetworkDiscovery() {
               className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden"
             >
               <div className="p-6 border-b flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-900 tracking-tight">Lancer un nouveau scan</h2>
+                <h2 className="text-xl font-bold text-slate-900 tracking-tight">{t('network.start_scan')}</h2>
                 <button onClick={() => setShowNewScanModal(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                   <X className="w-5 h-5 text-slate-500" />
                 </button>
@@ -394,26 +396,26 @@ export function NetworkDiscovery() {
               <div className="p-6 space-y-6">
                 {/* Proxy Agent Selection */}
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Proxy Agent (Source du Scan)</label>
+                  <label className="text-sm font-semibold text-slate-700">{t('network.proxy_agent')}</label>
                   <select 
                     value={selectedProxy}
                     onChange={(e) => setSelectedProxy(e.target.value)}
                     className="w-full p-3 bg-slate-50 border rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                   >
-                    <option value="">Sélectionner un agent en ligne...</option>
+                    <option value="">{t('network.select_proxy')}</option>
                     {proxyCandidates.map(p => (
                       <option key={p.id} value={p.id}>{p.name} ({p.ip})</option>
                     ))}
                   </select>
                   <p className="text-[11px] text-slate-500 flex items-center gap-1 px-1">
                     <Info className="w-3 h-3" />
-                    Seuls les serveurs et workstations Windows/Linux/macOS peuvent officier comme proxy.
+                    {t('network.empty_desc')}
                   </p>
                 </div>
 
                 {/* Subnet Input */}
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Sous-réseau (Optionnel)</label>
+                  <label className="text-sm font-semibold text-slate-700">{t('network.custom_subnet')}</label>
                   <input 
                     type="text"
                     placeholder="ex: 192.168.1.0/24"
@@ -421,18 +423,18 @@ export function NetworkDiscovery() {
                     onChange={(e) => setCustomSubnet(e.target.value)}
                     className="w-full p-3 bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                   />
-                  <p className="text-[11px] text-slate-500 px-1">Laissez vide pour scanner le réseau local par défaut de l'agent.</p>
+                  <p className="text-[11px] text-slate-500 px-1">{t('network.auto_detect')}</p>
                 </div>
 
                 {/* Scan Types */}
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-slate-700">Méthodes de Détection</label>
+                  <label className="text-sm font-semibold text-slate-700">{t('network.scan_types')}</label>
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { id: 'ping', label: 'Ping Sweep', desc: 'ICMP scan' },
-                      { id: 'arp', label: 'ARP Scan', desc: 'Couche 2 LAN' },
-                      { id: 'mdns', label: 'mDNS/Bonjour', desc: 'Identité Apple' },
-                      { id: 'portscan', label: 'Common Ports', desc: '80, 443, 22' }
+                      { id: 'ping', label: t('network.ping_sweep'), desc: 'ICMP scan' },
+                      { id: 'arp', label: t('network.arp_lookup'), desc: 'Couche 2 LAN' },
+                      { id: 'mdns', label: t('network.mdns_discovery'), desc: 'Identité Apple' },
+                      { id: 'portscan', label: t('network.port_scan'), desc: 'Common Ports' }
                     ].map(type => (
                       <button
                         key={type.id}
@@ -462,13 +464,13 @@ export function NetworkDiscovery() {
                   onClick={() => setShowNewScanModal(false)}
                   className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-200 rounded-xl transition-colors"
                 >
-                  Annuler
+                  {t('network.cancel_scan')}
                 </button>
                 <button 
                   onClick={handleStartScan}
                   className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all"
                 >
-                  Lancer le Scan
+                  {t('network.start_scan')}
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -498,6 +500,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function ResultRow(props: { device: ScanResult, onInvite: (email: string) => void | Promise<void>, key?: string | number }) {
   const { device, onInvite } = props;
+  const { t } = useLanguage();
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [email, setEmail] = useState('');
 
@@ -519,7 +522,7 @@ function ResultRow(props: { device: ScanResult, onInvite: (email: string) => voi
           </div>
           <div>
             <div className="font-medium text-slate-900">
-              {device.hostname || 'Appareil Inconnu'}
+              {device.hostname || t('common.unknown')}
             </div>
             <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
               {device.vendor && <span>{device.vendor}</span>}
@@ -547,11 +550,11 @@ function ResultRow(props: { device: ScanResult, onInvite: (email: string) => voi
         {device.isManaged ? (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-semibold border border-green-100">
             <Shield className="w-3.5 h-3.5" />
-            Géré (Agent)
+            {t('network.managed')}
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-semibold border border-slate-200">
-            Non géré
+            {t('network.unmanaged')}
           </span>
         )}
       </td>
@@ -561,14 +564,14 @@ function ResultRow(props: { device: ScanResult, onInvite: (email: string) => voi
             {device.invitationSent ? (
               <span className="text-[11px] font-bold text-green-600 flex items-center gap-1 pr-2">
                 <Mail className="w-3.5 h-3.5" />
-                Invité
+                {t('common.invited')}
               </span>
             ) : (
               <button 
                 onClick={() => setShowInviteModal(true)}
                 className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-all active:scale-95"
               >
-                Gérer cet Appareil
+                {t('network.manage_device')}
               </button>
             )}
             <button className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-all">
@@ -577,7 +580,7 @@ function ResultRow(props: { device: ScanResult, onInvite: (email: string) => voi
           </div>
         ) : (
           <button className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-all">
-            Dashboard
+            {t('common.dashboard')}
           </button>
         )}
 
@@ -598,14 +601,14 @@ function ResultRow(props: { device: ScanResult, onInvite: (email: string) => voi
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6"
               >
-                <h4 className="text-lg font-bold text-slate-900 mb-2">Installer l'Agent HypeRemote</h4>
+                <h4 className="text-lg font-bold text-slate-900 mb-2">{t('network.install_agent')}</h4>
                 <p className="text-sm text-slate-500 mb-6">
-                  Envoyez un lien de téléchargement personnalisé à cet appareil pour commencer l'installation de l'agent.
+                  {t('network.install_agent_desc')}
                 </p>
                 
                 <div className="space-y-4">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Email de l'utilisateur</label>
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">{t('common.email')}</label>
                     <input 
                       type="email"
                       value={email}
@@ -619,13 +622,13 @@ function ResultRow(props: { device: ScanResult, onInvite: (email: string) => voi
                       onClick={() => setShowInviteModal(false)}
                       className="flex-1 py-2.5 text-slate-600 text-sm font-bold hover:bg-slate-100 rounded-xl transition-all"
                     >
-                      Fermer
+                      {t('common.close')}
                     </button>
                     <button 
                       onClick={() => onInvite(email)}
                       className="flex-1 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
                     >
-                      Envoyer
+                      {t('common.send')}
                     </button>
                   </div>
                 </div>

@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
+	"sync"
 	"strings"
 	"time"
 
+	"github.com/go-ping/ping"
+	"github.com/grandcat/zeroconf"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/host"
@@ -304,6 +308,8 @@ func executeCommand(cmd Command) {
 		result, err = executeShutdown()
 	case "run_script":
 		result, err = executeScript(cmd.Payload)
+	case "network_scan":
+		result, err = executeNetworkScan(cmd.Payload)
 	case "get_info":
 		info := getSystemInfo()
 		infoBytes, _ := json.MarshalIndent(info, "", "  ")
@@ -436,4 +442,311 @@ func executeScript(payload string) (string, error) {
 
 	output, err := cmd.CombinedOutput()
 	return string(output), err
+}
+
+type NetworkScanPayload struct {
+	ScanID    string   `json:"scanId"`
+	ScanTypes []string `json:"scanTypes"`
+	Subnet    string   `json:"subnet"`
+}
+
+type ScanResult struct {
+	IPAddress      string `json:"ipAddress"`
+	MACAddress     string `json:"macAddress,omitempty"`
+	Hostname       string `json:"hostname,omitempty"`
+	OSGuess        string `json:"osGuess,omitempty"`
+	OpenPorts      []int  `json:"openPorts,omitempty"`
+	DeviceType     string `json:"deviceType,omitempty"`
+	Vendor         string `json:"vendor,omitempty"`
+	ResponseTimeMs int64  `json:"responseTimeMs,omitempty"`
+}
+
+var macVendorMap = map[string]string{
+	"00:1E:C2": "Apple", "3C:07:54": "Apple", "A4:5E:60": "Apple", "F4:0F:24": "Apple",
+	"00:14:22": "Dell", "00:26:B9": "Dell", "B8:CA:3A": "Dell",
+	"00:1F:29": "HP", "3C:D9:2B": "HP", "9C:8E:99": "HP",
+	"00:00:0C": "Cisco", "00:0A:41": "Cisco",
+	"00:04:23": "Intel", "00:15:17": "Intel",
+	"B8:27:EB": "Raspberry Pi", "DC:A6:32": "Raspberry Pi", "E4:5F:01": "Raspberry Pi",
+	"00:07:AB": "Samsung", "00:15:99": "Samsung", "28:BA:B5": "Samsung",
+	"00:50:56": "VMware", "00:0C:29": "VMware",
+	"08:00:27": "VirtualBox",
+}
+
+func executeNetworkScan(payload string) (string, error) {
+	var scanPayload NetworkScanPayload
+	if err := json.Unmarshal([]byte(payload), &scanPayload); err != nil {
+		return "", err
+	}
+
+	subnet := scanPayload.Subnet
+	if subnet == "" {
+		detected, err := detectLocalSubnet()
+		if err != nil {
+			sendScanError(scanPayload.ScanID, "Failed to detect subnet: "+err.Error())
+			return "", err
+		}
+		subnet = detected
+	}
+
+	// Expand /24 subnet (only supporting /24 for now as per instructions)
+	baseIP := subnet[:strings.LastIndex(subnet, ".")+1]
+	
+	var wg sync.WaitGroup
+	var resultsMu sync.Mutex
+	results := []ScanResult{}
+	
+	// Semaphore for 50 concurrent goroutines
+	sem := make(chan struct{}, 50)
+
+	for i := 1; i < 255; i++ {
+		ip := fmt.Sprintf("%s%d", baseIP, i)
+		wg.Add(1)
+		go func(ipAddr string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			result, ok := scanIP(ipAddr)
+			if ok {
+				resultsMu.Lock()
+				results = append(results, result)
+				resultsMu.Unlock()
+			}
+		}(ip)
+	}
+
+	// Start mDNS discovery in background
+	mdnsResults := make(map[string]string)
+	mdnsWG := sync.WaitGroup{}
+	mdnsWG.Add(1)
+	go func() {
+		defer mdnsWG.Done()
+		resolver, err := zeroconf.NewResolver(nil)
+		if err != nil {
+			return
+		}
+
+		entries := make(chan *zeroconf.ServiceEntry)
+		go func() {
+			for entry := range entries {
+				if len(entry.AddrIPv4) > 0 {
+					resultsMu.Lock()
+					mdnsResults[entry.AddrIPv4[0].String()] = entry.Instance
+					resultsMu.Unlock()
+				}
+			}
+		}()
+
+		ctx := reqContext(5 * time.Second)
+		resolver.Browse(ctx, "_workstation._tcp", "local.", entries)
+		resolver.Browse(ctx, "_ipp._tcp", "local.", entries)
+		resolver.Browse(ctx, "_airplay._tcp", "local.", entries)
+		resolver.Browse(ctx, "_ssh._tcp", "local.", entries)
+		<-ctx.Done()
+	}()
+
+	wg.Wait()
+	mdnsWG.Wait()
+
+	// Merge mDNS hostnames
+	for i := range results {
+		if name, ok := mdnsResults[results[i].IPAddress]; ok {
+			results[i].Hostname = name
+		}
+	}
+
+	// Submit results
+	submitScanResults(scanPayload.ScanID, subnet, results)
+
+	summary := fmt.Sprintf("Scan complete: %d devices found on %s", len(results), subnet)
+	return summary, nil
+}
+
+func scanIP(ip string) (ScanResult, bool) {
+	pinger, err := ping.NewPinger(ip)
+	if err != nil {
+		return ScanResult{}, false
+	}
+	pinger.Count = 1
+	pinger.Timeout = time.Second
+	err = pinger.Run()
+	if err != nil || pinger.PacketsRecv == 0 {
+		return ScanResult{}, false
+	}
+
+	stats := pinger.Statistics()
+	res := ScanResult{
+		IPAddress:      ip,
+		ResponseTimeMs: stats.AvgRtt.Milliseconds(),
+	}
+
+	// ARP lookup
+	res.MACAddress = lookupMAC(ip)
+	if res.MACAddress != "" {
+		res.Vendor = lookupVendor(res.MACAddress)
+	}
+
+	// Reverse DNS
+	names, _ := net.LookupAddr(ip)
+	if len(names) > 0 {
+		res.Hostname = strings.TrimSuffix(names[0], ".")
+	}
+
+	// Port Scan
+	scanPorts(&res)
+
+	return res, true
+}
+
+func lookupMAC(ip string) string {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("arp", "-a", ip)
+	case "darwin":
+		cmd = exec.Command("arp", "-n", ip)
+	default:
+		// Linux: read /proc/net/arp is better but lets try command first for simplicity in this helper
+		output, err := os.ReadFile("/proc/net/arp")
+		if err == nil {
+			lines := strings.Split(string(output), "\n")
+			for _, line := range lines {
+				if strings.Contains(line, ip) {
+					fields := strings.Fields(line)
+					if len(fields) >= 4 {
+						return fields[3]
+					}
+				}
+			}
+		}
+		cmd = exec.Command("arp", "-n", ip)
+	}
+
+	if cmd != nil {
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			// Basic parsing logic - find something that looks like a MAC
+			fields := strings.Fields(string(out))
+			for _, f := range fields {
+				if strings.Count(f, ":") == 5 || strings.Count(f, "-") == 5 {
+					return strings.ReplaceAll(f, "-", ":")
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func lookupVendor(mac string) string {
+	if len(mac) < 8 {
+		return ""
+	}
+	prefix := strings.ToUpper(mac[:8])
+	return macVendorMap[prefix]
+}
+
+func scanPorts(res *ScanResult) {
+	ports := []int{22, 80, 443, 445, 3389, 5900, 631, 9100, 161, 8080}
+	res.OpenPorts = []int{}
+	
+	for _, port := range ports {
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", res.IPAddress, port), 200*time.Millisecond)
+		if err == nil {
+			res.OpenPorts = append(res.OpenPorts, port)
+			conn.Close()
+		}
+	}
+
+	// Heuristics
+	hasPort := func(p int) bool {
+		for _, op := range res.OpenPorts {
+			if op == p { return true }
+		}
+		return false
+	}
+
+	res.DeviceType = "unknown"
+	if hasPort(3389) || hasPort(445) {
+		res.OSGuess = "Windows"
+		res.DeviceType = "computer"
+	} else if hasPort(22) {
+		res.OSGuess = "Linux/macOS"
+		res.DeviceType = "computer"
+	}
+	
+	if hasPort(631) || hasPort(9100) || strings.Contains(strings.ToLower(res.Hostname), "printer") {
+		res.DeviceType = "printer"
+	} else if hasPort(161) && res.DeviceType == "unknown" {
+		res.DeviceType = "router"
+	}
+}
+
+func detectLocalSubnet() (string, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
+				ip := ipnet.IP.To4()
+				return fmt.Sprintf("%d.%d.%d.0/24", ip[0], ip[1], ip[2]), nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no active IPv4 interface found")
+}
+
+func submitScanResults(scanID, subnet string, results []ScanResult) {
+	payload := map[string]interface{}{
+		"scanId":  scanID,
+		"subnet":  subnet,
+		"results": results,
+	}
+	sendScanPayload(payload)
+}
+
+func sendScanError(scanID, errStr string) {
+	payload := map[string]interface{}{
+		"scanId":  scanID,
+		"results": []ScanResult{},
+		"error":   errStr,
+	}
+	sendScanPayload(payload)
+}
+
+func sendScanPayload(payload interface{}) {
+	body, _ := json.Marshal(payload)
+	req, _ := http.NewRequest("POST", config.ServerURL+"/api/agent/network-scan-result", bytes.NewBuffer(body))
+	req.Header.Set("Authorization", "Bearer "+config.AgentJWT)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err == nil && resp != nil {
+		resp.Body.Close()
+	}
+}
+
+// Simple context helper for mDNS
+type SimpleContext struct {
+	done chan struct{}
+}
+func (c *SimpleContext) Done() <-chan struct{} { return c.done }
+func (c *SimpleContext) Err() error { return nil }
+func (c *SimpleContext) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (c *SimpleContext) Value(key interface{}) interface{} { return nil }
+
+func reqContext(d time.Duration) *SimpleContext {
+	ctx := &SimpleContext{done: make(chan struct{})}
+	go func() {
+		time.Sleep(d)
+		close(ctx.done)
+	}()
+	return ctx
 }

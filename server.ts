@@ -497,7 +497,7 @@ async function startServer() {
       await firestore.collection('commands').add({
         deviceId: proxyAgentId,
         userId: uid,
-        type: 'network_scan',
+        commandType: 'network_scan',
         payload: JSON.stringify({ scanId: scanRef.id, scanTypes, subnet: customSubnet }),
         status: 'pending',
         createdAt: FieldValue.serverTimestamp()
