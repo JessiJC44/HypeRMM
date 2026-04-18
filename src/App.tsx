@@ -90,84 +90,93 @@ export default function App() {
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        
-        // Determine auth method
-        const provider = firebaseUser.providerData[0]?.providerId;
-        const method = provider === 'google.com' ? 'google' : 'email';
-        setAuthMethod(method);
-        
-        // Primary Auth Complete
-        setAuthStep('primary-auth-complete');
+      try {
+        if (firebaseUser) {
+          // Determine auth method
+          const provider = firebaseUser.providerData[0]?.providerId;
+          const method = provider === 'google.com' ? 'google' : 'email';
+          setAuthMethod(method);
+          
+          setAuthStep('primary-auth-complete');
 
-        // Check if user document exists, create it if not
-        const userRef = doc(db, 'users', firebaseUser.uid);
-        const userDoc = await getDoc(userRef);
-        let userData = userDoc.data();
+          // Check if user document exists, create it if not
+          const userRef = doc(db, 'users', firebaseUser.uid);
+          const userDoc = await getDoc(userRef);
+          let userData = userDoc.data();
 
-        if (!userDoc.exists()) {
-          userData = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName,
-            photoURL: firebaseUser.photoURL,
-            role: firebaseUser.email === 'sedrayiokoraz@gmail.com' ? 'admin' : 'user',
-            createdAt: serverTimestamp(),
-            lastLogin: serverTimestamp()
-          };
-          await setDoc(userRef, userData);
-        } else {
-          // Update last login
-          await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
-        }
-        
-        // Handle Email verification if needed
-        if (method === 'email' && !firebaseUser.emailVerified) {
-          setNeedsEmailVerification(true);
-        }
-
-        const totpEnabled = userData?.totpEnabled || false;
-        const passkeyEnabled = userData?.passkeyEnabled || false;
-        const mfaEnabled = userData?.mfaEnabled || totpEnabled || passkeyEnabled;
-        
-        setUserTotpEnabled(totpEnabled);
-
-        // Check for passkeys
-        const userHasPasskey = await passkeyService.hasPasskey(firebaseUser.uid);
-        setHasPasskey(userHasPasskey);
-
-        if (mfaEnabled || userHasPasskey) {
-          setAuthStep('mfa-required');
-          if ((passkeyEnabled || userHasPasskey) && await passkeyService.isSupported()) {
-            setShow2FAMethod('passkey');
+          if (!userDoc.exists()) {
+            userData = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName,
+              photoURL: firebaseUser.photoURL,
+              role: firebaseUser.email === 'sedrayiokoraz@gmail.com' ? 'admin' : 'user',
+              createdAt: serverTimestamp(),
+              lastLogin: serverTimestamp()
+            };
+            await setDoc(userRef, userData);
           } else {
-            setShow2FAMethod('totp');
+            // Update last login
+            await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
           }
-          setIsMfaVerified(false);
+          
+          // Handle Email verification if needed
+          if (method === 'email' && !firebaseUser.emailVerified) {
+            setNeedsEmailVerification(true);
+          } else {
+            setNeedsEmailVerification(false);
+          }
+
+          const totpEnabled = userData?.totpEnabled || false;
+          const passkeyEnabled = userData?.passkeyEnabled || false;
+          const mfaEnabled = userData?.mfaEnabled || totpEnabled || passkeyEnabled;
+          
+          setUserTotpEnabled(totpEnabled);
+
+          // Check for passkeys
+          const userHasPasskey = await passkeyService.hasPasskey(firebaseUser.uid);
+          setHasPasskey(userHasPasskey);
+
+          if (mfaEnabled || userHasPasskey) {
+            if (!isMfaVerified) {
+              setAuthStep('mfa-required');
+              // Use a priority for passkeys if supported
+              const isPasskeyPossible = (passkeyEnabled || userHasPasskey);
+              setShow2FAMethod(isPasskeyPossible ? 'passkey' : 'totp');
+            } else {
+              setAuthStep('authenticated');
+            }
+          } else {
+            if (!isMfaVerified) {
+              setAuthStep('mfa-setup');
+              setMfaSetupMethod('choice');
+            } else {
+              setAuthStep('authenticated');
+            }
+          }
+          
+          setUser(firebaseUser);
+          setTotpVerified(false);
+          setEmailCodeVerified(false);
         } else {
-          // New user or no MFA - needs setup
-          setAuthStep('mfa-setup');
-          setMfaSetupMethod('choice');
+          setUser(null);
+          setAuthMethod(null);
+          setAuthStep('signing-in');
+          setUserTotpEnabled(null);
+          setTotpVerified(false);
+          setEmailCodeVerified(false);
           setIsMfaVerified(false);
+          setNeedsEmailVerification(false);
         }
-        
-        // Reset verification states on new login
-        setTotpVerified(false);
-        setEmailCodeVerified(false);
-      } else {
-        setUser(null);
-        setAuthMethod(null);
-        setAuthStep('signing-in');
-        setUserTotpEnabled(null);
-        setTotpVerified(false);
-        setEmailCodeVerified(false);
+      } catch (error) {
+        console.error('[Auth] Critical error in state listener:', error);
+      } finally {
+        setIsAuthLoading(false);
       }
-      setIsAuthLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [isMfaVerified]);
 
   if (isAuthLoading) {
     return (
@@ -182,10 +191,7 @@ export default function App() {
   // Step 1: Login / Sign-in required
   if (!user || authStep === 'idle' || authStep === 'signing-in') {
     return (
-      <>
-        <AnimatedCharactersLoginPage onLogin={() => setAuthStep('signing-in')} />
-        <Toaster position="top-right" />
-      </>
+      <AnimatedCharactersLoginPage onLogin={() => setAuthStep('signing-in')} />
     );
   }
 
@@ -201,23 +207,17 @@ export default function App() {
 
   // Step 3: MFA Setup (New Users)
   if (authStep === 'mfa-setup' && !isMfaVerified) {
-    if (mfaSetupMethod === 'choice') {
-      return (
-        <>
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+        {mfaSetupMethod === 'choice' && (
           <MFAChoice
             onChoosePasskey={() => setMfaSetupMethod('passkey')}
             onChooseTOTP={() => setMfaSetupMethod('totp')}
             onBack={() => auth.signOut()}
             passkeySupported={passkeySupported}
           />
-          <Toaster position="top-right" />
-        </>
-      );
-    }
-    
-    if (mfaSetupMethod === 'passkey') {
-      return (
-        <>
+        )}
+        {mfaSetupMethod === 'passkey' && (
           <PasskeySetup
             user={user}
             onComplete={() => {
@@ -227,14 +227,8 @@ export default function App() {
             onUseTOTPInstead={() => setMfaSetupMethod('totp')}
             onBack={() => setMfaSetupMethod('choice')}
           />
-          <Toaster position="top-right" />
-        </>
-      );
-    }
-    
-    if (mfaSetupMethod === 'totp') {
-      return (
-        <>
+        )}
+        {mfaSetupMethod === 'totp' && (
           <TOTPSetup 
             user={user} 
             onComplete={() => {
@@ -244,17 +238,16 @@ export default function App() {
             onBack={() => setMfaSetupMethod('choice')}
             onUsePasskeyInstead={passkeySupported ? () => setMfaSetupMethod('passkey') : undefined}
           />
-          <Toaster position="top-right" />
-        </>
-      );
-    }
+        )}
+      </div>
+    );
   }
 
   // Step 4: MFA Verification (Returning Users)
   if (authStep === 'mfa-required' && !isMfaVerified) {
-    if (show2FAMethod === 'passkey') {
-      return (
-        <>
+    return (
+      <div className="min-h-screen bg-background">
+        {show2FAMethod === 'passkey' ? (
           <PasskeyVerify
             user={user}
             onVerified={() => {
@@ -265,47 +258,41 @@ export default function App() {
             onTryAnotherMethod={() => setShow2FAMethod('totp')}
             onSignOut={() => auth.signOut()}
           />
-          <Toaster position="top-right" />
-        </>
-      );
-    }
-
-    return (
-      <>
-        <TOTPVerify 
-          user={user} 
-          onVerified={() => {
-            setTotpVerified(true);
-            setIsMfaVerified(true);
-            setAuthStep('authenticated');
-          }}
-          showBiometricOption={hasPasskey && passkeySupported}
-          onUseBiometric={() => setShow2FAMethod('passkey')}
-        />
-        <Toaster position="top-right" />
-      </>
+        ) : (
+          <TOTPVerify 
+            user={user} 
+            onVerified={() => {
+              setTotpVerified(true);
+              setIsMfaVerified(true);
+              setAuthStep('authenticated');
+            }}
+            showBiometricOption={hasPasskey && passkeySupported}
+            onUseBiometric={() => setShow2FAMethod('passkey')}
+          />
+        )}
+      </div>
     );
   }
 
   // Email login flow (If they bypass the above somehow or for specific email code)
   if (authMethod === 'email' && !emailCodeVerified && !isMfaVerified) {
     return (
-      <>
-        <EmailCodeVerify user={user} onVerified={() => setEmailCodeVerified(true)} />
-        <Toaster position="top-right" />
-      </>
+      <EmailCodeVerify user={user} onVerified={() => setEmailCodeVerified(true)} />
     );
   }
 
   // Step 5: Post-Auth Checks (Email Verification)
   if (needsEmailVerification && user && (authStep === 'authenticated' || !isMfaVerified)) {
     return (
-      <>
-        <EmailVerificationScreen user={user} onVerified={() => setNeedsEmailVerification(false)} />
-        <Toaster position="top-right" />
-      </>
+      <EmailVerificationScreen user={user} onVerified={() => setNeedsEmailVerification(false)} />
     );
   }
+
+  React.useEffect(() => {
+    const handleNav = () => setActiveTab('assets');
+    window.addEventListener('nav-to-assets', handleNav);
+    return () => window.removeEventListener('nav-to-assets', handleNav);
+  }, []);
 
   const renderContent = () => {
     switch (activeTab) {

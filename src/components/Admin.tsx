@@ -40,9 +40,11 @@ export function Admin() {
   const [registeringPasskey, setRegisteringPasskey] = React.useState(false);
   const [userPasskeys, setUserPasskeys] = React.useState<any[]>([]);
   const [passkeySupported, setPasskeySupported] = React.useState(false);
+  const [inIframe, setInIframe] = React.useState(false);
   const biometricMethod = getBiometricMethod();
 
   React.useEffect(() => {
+    setInIframe(window.self !== window.top);
     const checkSupport = async () => {
       const supported = await passkeyService.isSupported();
       setPasskeySupported(supported);
@@ -430,19 +432,25 @@ export function Admin() {
                     ) : (
                       <div className="p-6 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-center">
                         <p className="text-sm font-bold text-rose-600 italic">
-                          Face ID / Touch ID is restricted by browser security policies in this preview window.
+                          {inIframe 
+                            ? `${biometricMethod} is restricted by browser security policies in this preview window.`
+                            : `${biometricMethod} is not enabled or supported on this device/browser.`}
                         </p>
-                        <p className="text-[10px] text-muted-foreground mt-3 uppercase tracking-wide font-black">
-                          Open the app in a new tab to manage your passkeys.
-                        </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => window.open(window.location.href, '_blank')}
-                          className="mt-4 w-full rounded-xl border-dashed border-rose-500/40 hover:border-rose-500 text-rose-600 font-bold uppercase tracking-widest text-[9px]"
-                        >
-                          Open in New Tab
-                        </Button>
+                        {inIframe && (
+                          <>
+                            <p className="text-[10px] text-muted-foreground mt-3 uppercase tracking-wide font-black">
+                              Open the app in a new tab to manage your passkeys.
+                            </p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open(window.location.href, '_blank')}
+                              className="mt-4 w-full rounded-xl border-dashed border-rose-500/40 hover:border-rose-500 text-rose-600 font-bold uppercase tracking-widest text-[9px]"
+                            >
+                              Open in New Tab
+                            </Button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

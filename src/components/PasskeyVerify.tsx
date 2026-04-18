@@ -16,6 +16,7 @@ interface Props {
 export function PasskeyVerify({ user, onVerified, onTryAnotherMethod, onSignOut }: Props) {
   const [verifying, setVerifying] = React.useState(false);
   const [policyBlocked, setPolicyBlocked] = React.useState(false);
+  const [inIframe, setInIframe] = React.useState(false);
   const biometricMethod = getBiometricMethod();
 
   React.useEffect(() => {
@@ -23,6 +24,7 @@ export function PasskeyVerify({ user, onVerified, onTryAnotherMethod, onSignOut 
     if (status.blocked) {
       setPolicyBlocked(true);
     }
+    setInIframe(window.self !== window.top);
   }, []);
 
   const handleContinue = async () => {
@@ -128,15 +130,17 @@ export function PasskeyVerify({ user, onVerified, onTryAnotherMethod, onSignOut 
                 )}
               </Button>
 
-              <div className="pt-2 flex flex-col gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => window.open(window.location.href, '_blank')}
-                  className="w-full h-11 rounded-xl border-dashed border-primary/40 hover:border-primary text-xs font-bold uppercase tracking-widest text-primary/80"
-                >
-                  Open in New Tab (Fixes Security Errors)
-                </Button>
-              </div>
+              {inIframe && (
+                <div className="pt-2 flex flex-col gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open(window.location.href, '_blank')}
+                    className="w-full h-11 rounded-xl border-dashed border-primary/40 hover:border-primary text-xs font-bold uppercase tracking-widest text-primary/80"
+                  >
+                    Open in New Tab (Fixes Security Errors)
+                  </Button>
+                </div>
+              )}
             </>
           )}
           

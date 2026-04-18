@@ -82,6 +82,11 @@ export function TOTPVerify({ user, onVerified, onUseBiometric, showBiometricOpti
             placeholder="000000"
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && code.length === 6 && !verifying) {
+                verifyCode();
+              }
+            }}
             className="text-center text-2xl tracking-widest font-mono h-14"
             autoFocus
           />

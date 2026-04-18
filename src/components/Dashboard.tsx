@@ -79,15 +79,17 @@ export function Dashboard({ setActiveTab }: { setActiveTab: (tab: string) => voi
   }, []);
 
   const handleGenerateReport = () => {
+    if (!stats) return;
+    
     const reportContent = `HypeRemote Dashboard Report
 Generated: ${new Date().toLocaleString()}
 
 SUMMARY
 =======
-Open Tickets: ${stats.openTickets}
-Managed Devices: ${stats.managedDevices}
-Active Alerts: ${stats.activeAlerts}
-SLA Compliance: ${stats.slaCompliance}
+Open Tickets: ${stats.openTickets || 0}
+Managed Devices: ${stats.managedDevices || 0}
+Active Alerts: ${stats.activeAlerts || 0}
+SLA Compliance: ${stats.slaCompliance || 'N/A'}
 
 RECENT ALERTS
 =============

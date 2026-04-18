@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { motion, AnimatePresence } from 'motion/react';
-import { generateAIResponse } from '../services/geminiService';
+import { generateAIResponse } from '../services/aiService';
 import { ChatMessage } from '@/src/types';
 import { toast } from 'sonner';
 
@@ -64,9 +64,12 @@ export function AICenter() {
         timestamp: new Date().toISOString()
       };
       setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      toast.error("Erreur de connexion à l'IA. Vérifiez votre clé API.");
-      console.error(error);
+    } catch (error: any) {
+      console.error("AI error:", error);
+      const message = error?.message?.includes("No AI provider configured")
+        ? "Aucun fournisseur IA configuré. Ajoutez GEMINI_API_KEY ou OPENROUTER_API_KEY dans votre environnement."
+        : "L'IA est temporairement indisponible. Réessayez dans quelques instants.";
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -184,7 +187,7 @@ export function AICenter() {
               </Button>
             </div>
             <p className="text-center text-[10px] text-muted-foreground mt-3 font-bold uppercase tracking-[0.1em]">
-              Propulsé par Gemini 3.1 Flash • HypeRemote Intelligence
+              HypeRemote Intelligence
             </p>
           </div>
         </div>

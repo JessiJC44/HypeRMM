@@ -30,7 +30,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
-import { generateScript } from '../services/geminiService';
+import { generateScript } from '../services/aiService';
 import { auth, db } from '../lib/firebase';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -215,8 +215,11 @@ export function Scripts({ hideHeader = false }: { hideHeader?: boolean }) {
       );
       setEditingScript(prev => ({ ...prev, content }));
       toast.success('Script generated!');
-    } catch (error) {
-      toast.error('AI generation failed');
+    } catch (error: any) {
+      const message = error?.message?.includes("No AI provider configured")
+        ? "Aucun fournisseur IA configuré. Ajoutez GEMINI_API_KEY ou OPENROUTER_API_KEY dans votre environnement."
+        : "La génération de script par l'IA a échoué. Réessayez plus tard.";
+      toast.error(message);
       console.error(error);
     } finally {
       setIsGenerating(false);

@@ -264,14 +264,19 @@ export function NetworkDiscovery() {
           {/* Main Content Area */}
           <div className="lg:col-span-9 flex flex-col gap-6">
             {!activeScan ? (
-              <div className="h-[500px] flex flex-col items-center justify-center text-center p-12 bg-white rounded-3xl border border-slate-100 shadow-sm">
-                <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
-                  <Globe className="w-10 h-10 text-indigo-400" />
+              <div className="h-[500px] flex flex-col items-center justify-center text-center p-12 bg-white rounded-3xl border border-slate-100 shadow-sm group hover:border-indigo-200 transition-all cursor-pointer"
+                   onClick={() => proxyCandidates.length > 0 ? setShowNewScanModal(true) : toast.error(t('network.no_proxy_available'))}>
+                <div className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mb-6 border-4 border-white shadow-sm group-hover:scale-110 transition-transform">
+                  <Globe className="w-12 h-12 text-indigo-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-slate-900 mb-2">{t('network.empty_title')}</h3>
-                <p className="text-slate-500 max-w-sm">
+                <h3 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">{t('network.empty_title')}</h3>
+                <p className="text-slate-500 max-w-sm mb-8 leading-relaxed font-medium">
                   {t('network.empty_desc')}
                 </p>
+                <div className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100 group-hover:bg-indigo-700 active:scale-95 transition-all">
+                  <Plus className="w-4 h-4" />
+                  {t('network.start_scan')}
+                </div>
               </div>
             ) : (
               <div className="flex flex-col gap-6">
@@ -333,10 +338,27 @@ export function NetworkDiscovery() {
                       <div className="mb-4 inline-flex items-center justify-center w-12 h-12 bg-slate-50 rounded-full">
                         <Monitor className="w-6 h-6" />
                       </div>
-                      <p>{t('network.no_devices_found')}</p>
-                      {activeScan.status === 'running' && (
-                        <p className="text-sm mt-1 animate-pulse text-indigo-500">{t('network.scanning')}</p>
-                      )}
+                      <div className="py-4 space-y-4">
+                        <p className="text-slate-500 font-medium">{t('network.no_devices_found')}</p>
+                        {activeScan.status === 'running' ? (
+                          <p className="text-sm mt-1 animate-pulse text-indigo-500 font-bold uppercase tracking-widest">{t('network.scanning')}</p>
+                        ) : (
+                          <div className="flex flex-col items-center gap-4 mt-2">
+                            <p className="text-[10px] text-slate-400 max-w-[250px] mx-auto leading-relaxed">
+                              Aucun agent proxy n'est actuellement en ligne pour cette zone. Assurez-vous qu'au moins un appareil avec l'agent est connecté.
+                            </p>
+                            <button 
+                              onClick={() => {
+                                setShowNewScanModal(false);
+                                window.dispatchEvent(new CustomEvent('nav-to-assets'));
+                              }}
+                              className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95 shadow-lg"
+                            >
+                              Gérer les agents
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
