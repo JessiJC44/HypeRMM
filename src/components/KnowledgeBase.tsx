@@ -1,64 +1,131 @@
 import * as React from 'react';
-import { BookOpen, Search, Filter, Plus, FileText, Video, HelpCircle, ChevronRight, ExternalLink } from 'lucide-react';
+import { BookOpen, Search, Filter, Plus, FileText, Video, HelpCircle, ChevronRight, ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { motion } from 'motion/react';
+import { cn } from '@/lib/utils';
+import { motion, AnimatePresence } from 'motion/react';
+import { auth } from '../lib/firebase';
+import { toast } from 'sonner';
 
 export function KnowledgeBase() {
-  const categories = [
-    { name: 'Getting Started', count: 12, icon: HelpCircle },
-    { name: 'Agent Installation', count: 8, icon: FileText },
-    { name: 'Remote Access', count: 15, icon: Video },
-    { name: 'Patch Management', count: 10, icon: FileText },
-    { name: 'Network Discovery', count: 6, icon: Search },
-    { name: 'Billing & Account', count: 4, icon: HelpCircle },
-  ];
+  const [articles, setArticles] = React.useState<any[]>([]);
+  const [categories, setCategories] = React.useState<string[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [search, setSearch] = React.useState('');
+  const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null);
 
-  const recentArticles = [
-    { title: 'How to install the HypeRemote agent on macOS', category: 'Agent Installation', date: '2 days ago' },
-    { title: 'Configuring Flux for remote access', category: 'Remote Access', date: '5 days ago' },
-    { title: 'Best practices for patch automation', category: 'Patch Management', date: '1 week ago' },
-    { title: 'Troubleshooting network discovery issues', category: 'Network Discovery', date: '2 weeks ago' },
+  const fetchArticles = async () => {
+    setLoading(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+      
+      const queryParams = new URLSearchParams();
+      if (selectedCategory) queryParams.append('category', selectedCategory);
+      if (search) queryParams.append('search', search);
+
+      const response = await fetch(`/api/kb/articles?${queryParams.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch articles');
+      const data = await response.json();
+      setArticles(data);
+    } catch (err) {
+      toast.error('Failed to load articles');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+      const response = await fetch('/api/kb/categories', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch categories');
+      const data = await response.json();
+      setCategories(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchArticles();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, selectedCategory]);
+
+  const defaultCategories = [
+    { name: 'Getting Started', icon: HelpCircle },
+    { name: 'Agent Installation', icon: FileText },
+    { name: 'Remote Access', icon: Video },
+    { name: 'Patch Management', icon: FileText },
+    { name: 'Network Discovery', icon: Search },
+    { name: 'Billing & Account', icon: HelpCircle },
   ];
 
   return (
-    <div className="p-8 space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
+    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col items-center text-center space-y-4 max-w-2xl mx-auto py-8"
+        className="flex flex-col items-center text-center space-y-4 max-w-2xl mx-auto py-4 lg:py-8"
       >
-        <h1 className="text-3xl font-bold text-foreground">Knowledge Base</h1>
-        <p className="text-muted-foreground">Search for help articles, video tutorials, and best practices.</p>
+        <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Knowledge Base</h1>
+        <p className="text-muted-foreground text-sm lg:text-base">Search for help articles, video tutorials, and best practices.</p>
         <div className="relative w-full mt-4">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
           <Input 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search for articles, guides, and more..." 
-            className="pl-12 h-14 rounded-2xl border-border bg-card shadow-sm text-lg focus:ring-primary text-foreground" 
+            className="pl-12 h-12 lg:h-14 rounded-2xl border-border bg-card shadow-sm text-base lg:text-lg focus:ring-primary text-foreground" 
           />
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {categories.map((cat, index) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {defaultCategories.map((cat, index) => (
           <motion.div
             key={cat.name}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1 * index }}
           >
-            <Card className="border-none shadow-sm hover:shadow-md transition-all cursor-pointer group h-full bg-card">
+            <Card 
+              className={cn(
+                "border-none shadow-sm hover:shadow-md transition-all cursor-pointer group h-full bg-card active:scale-[0.98]",
+                selectedCategory === cat.name && "ring-2 ring-primary"
+              )}
+              onClick={() => setSelectedCategory(selectedCategory === cat.name ? null : cat.name)}
+            >
               <CardContent className="p-6 flex items-center gap-4">
-                <div className="p-3 bg-primary/10 rounded-2xl text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                <div className={cn(
+                  "p-3 rounded-2xl transition-colors",
+                  selectedCategory === cat.name ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground"
+                )}>
                   <cat.icon size={24} />
                 </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-foreground">{cat.name}</h3>
-                  <p className="text-xs text-muted-foreground font-medium">{cat.count} articles</p>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-foreground truncate">{cat.name}</h3>
+                  <p className="text-xs text-muted-foreground font-medium">Click to filter</p>
                 </div>
-                <ChevronRight size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
+                <ChevronRight size={18} className={cn(
+                  "transition-colors",
+                  selectedCategory === cat.name ? "text-primary" : "text-muted-foreground group-hover:text-primary"
+                )} />
               </CardContent>
             </Card>
           </motion.div>
@@ -72,28 +139,43 @@ export function KnowledgeBase() {
           transition={{ delay: 0.4 }}
           className="space-y-6"
         >
-          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <FileText size={20} className="text-primary" />
-            Recent Articles
-          </h2>
-          <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden divide-y divide-border">
-            {recentArticles.map((article, index) => (
-              <motion.div 
-                key={article.title}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 + (index * 0.1) }}
-                className="p-4 hover:bg-muted/20 transition-colors cursor-pointer group"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-bold text-foreground group-hover:text-primary transition-colors">{article.title}</h4>
-                    <p className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-wider">{article.category} • {article.date}</p>
-                  </div>
-                  <ExternalLink size={14} className="text-muted-foreground" />
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+              <FileText size={20} className="text-primary" />
+              {selectedCategory ? `${selectedCategory} Articles` : 'Recent Articles'}
+            </h2>
+            {loading && <Loader2 className="animate-spin text-primary" size={20} />}
+          </div>
+          
+          <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden divide-y divide-border min-h-[200px]">
+            <AnimatePresence mode="popLayout">
+              {articles.length === 0 && !loading ? (
+                <div className="p-12 text-center text-muted-foreground font-medium italic">
+                  No articles found for this search/category.
                 </div>
-              </motion.div>
-            ))}
+              ) : (
+                articles.map((article, index) => (
+                  <motion.div 
+                    key={article.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="p-4 hover:bg-muted/20 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-bold text-foreground group-hover:text-primary transition-colors truncate">{article.title}</h4>
+                        <p className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-wider">
+                          {article.category} • {new Date(article.createdAt?._seconds * 1000 || Date.now()).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <ExternalLink size={14} className="text-muted-foreground shrink-0 mt-1" />
+                    </div>
+                  </motion.div>
+                ))
+              )}
+            </AnimatePresence>
           </div>
           <Button variant="ghost" className="w-full text-primary font-bold hover:bg-primary/10">View All Articles</Button>
         </motion.div>

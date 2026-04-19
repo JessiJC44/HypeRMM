@@ -72,6 +72,15 @@ async function requireAdmin(req: any, res: any, next: any) {
 // Agent state
 const connectedAgents = new Map<string, { lastSeen: Date }>();
 
+// Helper to produce CSV strings
+function rowsToCsv(headers: string[], rows: (string | number | null)[][]): string {
+  const escape = (v: any) => {
+    const s = v === null || v === undefined ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return [headers.join(','), ...rows.map(r => r.map(escape).join(','))].join('\n');
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -305,6 +314,179 @@ async function startServer() {
     } catch (error) {
       console.error("❌ Save logs error:", error);
       res.status(500).json({ error: "Failed to save logs" });
+    }
+  });
+
+  // === Reports API ===
+
+  app.get('/api/reports/executive-summary', verifyFirebaseToken, async (req: any, res) => {
+    const { uid } = req.user;
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    try {
+      const [devicesSnap, ticketsSnap, alertsSnap] = await Promise.all([
+        firestore.collection('devices').where('userId', '==', uid).get(),
+        firestore.collection('tickets').where('userId', '==', uid).where('createdAt', '>=', Timestamp.fromDate(thirtyDaysAgo)).get(),
+        firestore.collection('alerts').where('userId', '==', uid).where('createdAt', '>=', Timestamp.fromDate(thirtyDaysAgo)).get(),
+      ]);
+      const rows: any[][] = [
+        ['Total Managed Devices', devicesSnap.size],
+        ['Online Devices', devicesSnap.docs.filter(d => d.data().status === 'online').length],
+        ['Tickets (last 30 days)', ticketsSnap.size],
+        ['Alerts (last 30 days)', alertsSnap.size],
+        ['Critical Alerts', alertsSnap.docs.filter(d => d.data().severity === 'critical').length],
+      ];
+      const csv = rowsToCsv(['Metric', 'Value'], rows);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="executive-summary.csv"');
+      res.status(200).send(csv);
+    } catch (error) {
+      console.error("❌ Exec Summary Error:", error);
+      res.status(500).json({ error: "Failed to generate report" });
+    }
+  });
+
+  app.get('/api/reports/asset-inventory', verifyFirebaseToken, async (req: any, res) => {
+    const { uid } = req.user;
+    try {
+      const snap = await firestore.collection('devices').where('userId', '==', uid).get();
+      const rows = snap.docs.map(d => {
+        const x = d.data();
+        return [
+          x.name || '', 
+          x.os || '', 
+          x.hostname || '', 
+          x.ipAddress || '', 
+          x.status || '', 
+          x.lastSeen instanceof Timestamp ? x.lastSeen.toDate().toISOString() : (x.lastSeen || '')
+        ];
+      });
+      const csv = rowsToCsv(['Name', 'OS', 'Hostname', 'IP Address', 'Status', 'Last Seen'], rows);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="asset-inventory.csv"');
+      res.status(200).send(csv);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate report" });
+    }
+  });
+
+  app.get('/api/reports/patch-status', verifyFirebaseToken, async (req: any, res) => {
+    const { uid } = req.user;
+    try {
+      const snap = await firestore.collection('patches').where('userId', '==', uid).get();
+      const rows = snap.docs.map(d => {
+        const x = d.data();
+        return [
+          x.deviceName || '', 
+          x.patchId || '', 
+          x.title || '', 
+          x.severity || '', 
+          x.status || '', 
+          x.installedAt instanceof Timestamp ? x.installedAt.toDate().toISOString() : (x.installedAt || '')
+        ];
+      });
+      const csv = rowsToCsv(['Device', 'Patch ID', 'Title', 'Severity', 'Status', 'Installed At'], rows);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="patch-status.csv"');
+      res.status(200).send(csv);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate report" });
+    }
+  });
+
+  app.get('/api/reports/ticket-activity', verifyFirebaseToken, async (req: any, res) => {
+    const { uid } = req.user;
+    try {
+      const snap = await firestore.collection('tickets').where('userId', '==', uid).get();
+      const rows = snap.docs.map(d => {
+        const x = d.data();
+        const createdAt = x.createdAt instanceof Timestamp ? x.createdAt.toDate() : (x.createdAt ? new Date(x.createdAt) : null);
+        const ageDays = createdAt ? Math.floor((Date.now() - createdAt.getTime()) / (24 * 60 * 60 * 1000)) : '';
+        return [d.id, x.title || '', x.status || '', x.priority || '', x.assignee || '', ageDays];
+      });
+      const csv = rowsToCsv(['Ticket ID', 'Title', 'Status', 'Priority', 'Assignee', 'Age (days)'], rows);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="ticket-activity.csv"');
+      res.status(200).send(csv);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate report" });
+    }
+  });
+
+  // === KnowledgeBase API ===
+
+  app.get("/api/kb/categories", verifyFirebaseToken, async (req, res) => {
+    try {
+      const snap = await firestore.collection("kb_articles")
+        .where("published", "==", true)
+        .get();
+      const categories = [...new Set(snap.docs.map(d => d.data().category))];
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
+  app.get("/api/kb/articles", verifyFirebaseToken, async (req, res) => {
+    try {
+      const { category, search, limit = 20 } = req.query;
+      let q: any = firestore.collection("kb_articles").where("published", "==", true);
+      
+      if (category) q = q.where("category", "==", category);
+      
+      const snap = await q.orderBy("createdAt", "desc").limit(Number(limit)).get();
+      let articles = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      
+      if (search) {
+        const term = String(search).toLowerCase();
+        articles = articles.filter((a: any) => 
+          a.title.toLowerCase().includes(term) || a.content.toLowerCase().includes(term)
+        );
+      }
+      
+      res.json(articles);
+    } catch (error) {
+      console.error("❌ KB Articles Error:", error);
+      res.status(500).json({ error: "Failed to fetch articles" });
+    }
+  });
+
+  app.get("/api/kb/articles/:id", verifyFirebaseToken, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const articleRef = firestore.collection("kb_articles").doc(id);
+      const doc = await articleRef.get();
+      
+      if (!doc.exists) return res.status(404).json({ error: "Article not found" });
+      
+      // Increment views
+      await articleRef.update({ views: FieldValue.increment(1) });
+      
+      res.json({ id: doc.id, ...doc.data() });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch article" });
+    }
+  });
+
+  app.post("/api/kb/articles", verifyFirebaseToken, requireAdmin, async (req: any, res) => {
+    try {
+      const { title, category, content, published = true } = req.body;
+      const articleRef = firestore.collection("kb_articles").doc();
+      const now = FieldValue.serverTimestamp();
+      
+      await articleRef.set({
+        title,
+        category,
+        content,
+        published,
+        author: req.user.email || 'Admin',
+        views: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+      
+      res.status(201).json({ id: articleRef.id });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create article" });
     }
   });
 

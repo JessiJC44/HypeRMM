@@ -10,21 +10,65 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 import { motion } from 'motion/react';
 
 export function Reports() {
-  const data = [
-    { name: 'Jan', tickets: 45, devices: 120 },
-    { name: 'Feb', tickets: 52, devices: 125 },
-    { name: 'Mar', tickets: 38, devices: 132 },
-    { name: 'Apr', tickets: 65, devices: 140 },
-    { name: 'May', tickets: 48, devices: 156 },
-    { name: 'Jun', tickets: 20, devices: 160 },
-  ];
+  const [data, setData] = React.useState<MonthlyReport[]>([]);
+  const [loadingReport, setLoadingReport] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+    computeMonthlyReport(user.uid)
+      .then(setData)
+      .catch(err => {
+        console.error('Failed to load report data:', err);
+        toast.error('Failed to load report data');
+      });
+  }, []);
 
   const reportTypes = [
-    { title: 'Executive Summary', desc: 'High-level overview of IT health and SLA compliance.', icon: PieChart },
-    { title: 'Asset Inventory', desc: 'Detailed list of all managed hardware and software.', icon: BarChart3 },
-    { title: 'Patch Status', desc: 'Compliance report for OS and 3rd party updates.', icon: TrendingUp },
-    { title: 'Ticket Activity', desc: 'Analysis of support queue and technician performance.', icon: FileText },
+    { id: 'executive-summary', title: 'Executive Summary', desc: 'High-level overview of IT health and SLA compliance.', icon: PieChart },
+    { id: 'asset-inventory', title: 'Asset Inventory', desc: 'Detailed list of all managed hardware and software.', icon: BarChart3 },
+    { id: 'patch-status', title: 'Patch Status', desc: 'Compliance report for OS and 3rd party updates.', icon: TrendingUp },
+    { id: 'ticket-activity', title: 'Ticket Activity', desc: 'Analysis of support queue and technician performance.', icon: FileText },
   ];
+
+  const handleDownloadReport = async (reportId: string, title: string) => {
+    const user = auth.currentUser;
+    if (!user) {
+      toast.error('You must be logged in to download reports');
+      return;
+    }
+
+    setLoadingReport(reportId);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/reports/${reportId}`, {
+        headers: { 
+          'Authorization': `Bearer ${token}` 
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate report');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${reportId}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success(`${title} downloaded successfully`);
+    } catch (err) {
+      console.error('Download error:', err);
+      toast.error('Failed to download report. Please try again later.');
+    } finally {
+      setLoadingReport(null);
+    }
+  };
 
   return (
     <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 bg-background min-h-screen animate-in fade-in duration-500">
@@ -42,9 +86,13 @@ export function Reports() {
             <Calendar size={18} />
             Scheduled Reports
           </Button>
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 gap-2 w-full sm:w-auto">
+          <Button 
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 gap-2 w-full sm:w-auto"
+            onClick={() => handleDownloadReport('executive-summary', 'Full Data Export')}
+            disabled={loadingReport === 'executive-summary'}
+          >
             <Download size={18} />
-            Export Data
+            {loadingReport === 'executive-summary' ? 'Generating...' : 'Export Data'}
           </Button>
         </div>
       </motion.div>
@@ -57,15 +105,23 @@ export function Reports() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1 * index }}
           >
-            <Card className="border border-border bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group h-full">
+            <Card 
+              className="border border-border bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group h-full"
+              onClick={() => handleDownloadReport(report.id, report.title)}
+            >
               <CardContent className="p-6">
                 <div className="p-3 bg-primary/10 rounded-2xl text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors w-fit mb-4">
                   <report.icon size={24} />
                 </div>
                 <h3 className="font-bold text-foreground">{report.title}</h3>
                 <p className="text-xs text-muted-foreground font-medium mt-1">{report.desc}</p>
-                <Button variant="ghost" size="sm" className="mt-4 text-primary font-bold p-0 h-auto hover:bg-transparent">
-                  Generate Now
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="mt-4 text-primary font-bold p-0 h-auto hover:bg-transparent"
+                  disabled={loadingReport === report.id}
+                >
+                  {loadingReport === report.id ? 'Generating...' : 'Generate Now'}
                 </Button>
               </CardContent>
             </Card>
@@ -131,10 +187,10 @@ export function Reports() {
           <h2 className="text-xl font-bold text-foreground">Recent Reports</h2>
           <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden divide-y divide-border">
             {[
-              { name: 'Monthly Executive Summary', date: 'Oct 01, 2023', size: '2.4 MB' },
-              { name: 'Asset Inventory - Acme Corp', date: 'Sep 28, 2023', size: '1.8 MB' },
-              { name: 'Patch Compliance Audit', date: 'Sep 25, 2023', size: '3.1 MB' },
-              { name: 'Technician Performance', date: 'Sep 20, 2023', size: '1.2 MB' },
+              { id: 'executive-summary', name: 'Monthly Executive Summary', date: 'Latest', size: '-' },
+              { id: 'asset-inventory', name: 'Asset Inventory', date: 'Latest', size: '-' },
+              { id: 'patch-status', name: 'Patch Compliance Audit', date: 'Latest', size: '-' },
+              { id: 'ticket-activity', name: 'Ticket Activity', date: 'Latest', size: '-' },
             ].map((report, i) => (
               <motion.div 
                 key={i}
@@ -142,6 +198,7 @@ export function Reports() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 + (i * 0.1) }}
                 className="p-4 flex items-center justify-between hover:bg-muted/20 transition-colors cursor-pointer group"
+                onClick={() => handleDownloadReport(report.id, report.name)}
               >
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-muted rounded-lg text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
@@ -149,7 +206,7 @@ export function Reports() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <h4 className="text-sm font-bold text-foreground truncate">{report.name}</h4>
-                    <p className="text-[10px] text-muted-foreground font-medium whitespace-nowrap">{report.date} • {report.size}</p>
+                    <p className="text-[10px] text-muted-foreground font-medium whitespace-nowrap">{report.date}</p>
                   </div>
                 </div>
                 <Download size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />

@@ -236,6 +236,39 @@
         "invitationSentAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "scanId", "ipAddress", "isManaged", "discoveredAt"]
+    },
+    "KnowledgeBaseArticle": {
+      "title": "KnowledgeBaseArticle",
+      "description": "Internal help article",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "content": { "type": "string" },
+        "published": { "type": "boolean" },
+        "author": { "type": "string" },
+        "views": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "category", "content", "published"]
+    },
+    "DeviceHeartbeat": {
+      "title": "DeviceHeartbeat",
+      "description": "Individual performance metrics heartbeat from a device",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "cpu": { "type": "number" },
+        "ram": { "type": "number", "description": "RAM usage percentage" },
+        "diskUsed": { "type": "number" },
+        "diskTotal": { "type": "number" },
+        "networkRx": { "type": "number" },
+        "networkTx": { "type": "number" }
+      },
+      "required": ["userId", "deviceId", "timestamp"]
     }
   },
   "firestore": {
@@ -298,6 +331,14 @@
     "/network_scan_results/{resultId}": {
       "schema": "NetworkScanResult",
       "description": "Devices found in network scans"
+    },
+    "/kb_articles/{articleId}": {
+      "schema": "KnowledgeBaseArticle",
+      "description": "Knowledge Base help articles"
+    },
+    "/device_heartbeats/{heartbeatId}": {
+      "schema": "DeviceHeartbeat",
+      "description": "Near real-time performance metrics"
     }
   }
 }
