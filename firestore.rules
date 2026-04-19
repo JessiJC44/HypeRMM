@@ -103,6 +103,12 @@ service cloud.firestore {
     // Commands, Logs, Enrollment Tokens, Scripts, script_runs, network_scans, results
     // are all restricted to Admin role or specific userId match via the pattern above.
     
+    match /passkeys/{docId} { 
+      allow read, list: if isAdmin() || isDocOwner();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+    }
+    
     match /commands/{docId} { allow read, list: if isAdmin() || isDocOwner(); }
     match /device_logs/{docId} { allow read, list: if isAdmin() || isDocOwner(); }
     match /scripts/{docId} { allow read, list: if isAdmin() || isDocOwner(); }

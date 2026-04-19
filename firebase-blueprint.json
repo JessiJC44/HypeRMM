@@ -269,6 +269,22 @@
         "networkTx": { "type": "number" }
       },
       "required": ["userId", "deviceId", "timestamp"]
+    },
+    "Passkey": {
+      "title": "Passkey",
+      "description": "FIDO2/WebAuthn credential for passwordless login",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "credentialID": { "type": "string" },
+        "publicKey": { "type": "string" },
+        "counter": { "type": "number" },
+        "deviceType": { "type": "string" },
+        "backedUp": { "type": "boolean" },
+        "transports": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "credentialID", "publicKey"]
     }
   },
   "firestore": {
@@ -339,6 +355,10 @@
     "/device_heartbeats/{heartbeatId}": {
       "schema": "DeviceHeartbeat",
       "description": "Near real-time performance metrics"
+    },
+    "/passkeys/{docId}": {
+      "schema": "Passkey",
+      "description": "User biometric passkeys"
     }
   }
 }
