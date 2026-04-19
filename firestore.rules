@@ -139,6 +139,11 @@ service cloud.firestore {
       allow read: if isDocOwner() || isAdmin();
       allow create, update, delete: if false;
     }
+
+    match /device_heartbeats/{heartbeatId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create, update, delete: if false;
+    }
     
     // Legacy mapping if needed for older migrations
     match /agent_enrollments/{tokenHash} {

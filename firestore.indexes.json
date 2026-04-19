@@ -97,6 +97,15 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "discoveredAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "device_heartbeats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "deviceId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

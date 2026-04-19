@@ -10,6 +10,7 @@ import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import cron from "node-cron";
 
 dotenv.config();
 
@@ -187,6 +188,24 @@ async function startServer() {
         agentVersion: agentVersion || metrics?.agent_version,
         lastSeen: FieldValue.serverTimestamp(),
       };
+
+      const deviceDoc = await firestore.collection("devices").doc(agentId).get();
+      if (deviceDoc.exists) {
+        const deviceData = deviceDoc.data();
+        await firestore.collection("device_heartbeats").add({
+          userId: deviceData?.userId,
+          deviceId: agentId,
+          timestamp: FieldValue.serverTimestamp(),
+          cpu: cpu || metrics?.cpu || 0,
+          ram: (ramUsed || metrics?.ram_used) && (ramTotal || metrics?.ram_total) 
+               ? ((ramUsed || metrics?.ram_used) / (ramTotal || metrics?.ram_total)) * 100 
+               : 0,
+          diskUsed: diskUsed || metrics?.disk_used || 0,
+          diskTotal: diskTotal || metrics?.disk_total || 0,
+          networkRx: metrics?.network_rx || 0,
+          networkTx: metrics?.network_tx || 0,
+        });
+      }
 
       await firestore.collection("devices").doc(agentId).update(data);
 
@@ -843,6 +862,20 @@ async function startServer() {
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+  });
+
+  // Cleanup old heartbeats (30 days)
+  cron.schedule('0 0 * * *', async () => {
+    console.log('🧹 Cleaning up old heartbeats...');
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const snapshot = await firestore.collection('device_heartbeats')
+      .where('timestamp', '<', Timestamp.fromDate(thirtyDaysAgo))
+      .get();
+    
+    const batch = firestore.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    console.log(`✅ Cleaned up ${snapshot.size} heartbeats.`);
   });
 }
 

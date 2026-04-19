@@ -46,9 +46,18 @@ import { Device, Command, DeviceLog } from '@/src/types';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { useLanguage } from '../contexts/LanguageContext';
 import { firestoreService } from '../services/firestoreService';
+import { 
+  query, 
+  where, 
+  orderBy, 
+  limit, 
+  onSnapshot, 
+  collection, 
+  Timestamp 
+} from 'firebase/firestore';
 
 const AppleIcon = ({ size = 16, className = "" }: { size?: number; className?: string }) => (
   <svg 
@@ -74,16 +83,6 @@ interface AgentConsoleProps {
   onBack: () => void;
 }
 
-const performanceData = [
-  { time: '10:00', cpu: 12, ram: 45 },
-  { time: '10:05', cpu: 18, ram: 48 },
-  { time: '10:10', cpu: 45, ram: 52 },
-  { time: '10:15', cpu: 32, ram: 50 },
-  { time: '10:20', cpu: 25, ram: 49 },
-  { time: '10:25', cpu: 15, ram: 47 },
-  { time: '10:30', cpu: 20, ram: 48 },
-];
-
 export function AgentConsole({ device, onBack }: AgentConsoleProps) {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = React.useState('overview');
@@ -92,6 +91,37 @@ export function AgentConsole({ device, onBack }: AgentConsoleProps) {
   const [commands, setCommands] = React.useState<Command[]>([]);
   const [logs, setLogs] = React.useState<DeviceLog[]>([]);
   const [selectedCommand, setSelectedCommand] = React.useState<Command | null>(null);
+  const [performanceData, setPerformanceData] = React.useState<Array<{ time: string; cpu: number; ram: number }>>([]);
+
+  React.useEffect(() => {
+    const user = auth.currentUser;
+    if (!user || !device.id) return;
+
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const q = query(
+      collection(db, 'device_heartbeats'),
+      where('userId', '==', user.uid),
+      where('deviceId', '==', device.id),
+      where('timestamp', '>=', Timestamp.fromDate(thirtyMinAgo)),
+      orderBy('timestamp', 'asc'),
+      limit(100)
+    );
+
+    const unsubscribe = onSnapshot(q, snapshot => {
+      const rows = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const ts = data.timestamp?.toDate?.() || new Date();
+        return {
+          time: ts.toTimeString().slice(0, 5),
+          cpu: Math.round(data.cpu || 0),
+          ram: Math.round(data.ram || 0),
+        };
+      });
+      setPerformanceData(rows);
+    });
+
+    return () => unsubscribe();
+  }, [device.id]);
 
   React.useEffect(() => {
     const user = auth.currentUser;

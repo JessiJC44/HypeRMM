@@ -1,4 +1,7 @@
 import * as React from 'react';
+import { auth } from '../lib/firebase';
+import { computeMonthlyReport, MonthlyReport } from '../services/statsService';
+import { toast } from 'sonner';
 import { BarChart3, Download, Calendar, Filter, ChevronDown, PieChart, TrendingUp, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

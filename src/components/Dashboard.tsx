@@ -38,25 +38,15 @@ import {
   TooltipTrigger 
 } from '@/components/ui/tooltip';
 import { useLanguage } from '../contexts/LanguageContext';
-
-const chartData = [
-  { name: 'Mon', tickets: 12, alerts: 45 },
-  { name: 'Tue', tickets: 19, alerts: 52 },
-  { name: 'Wed', tickets: 15, alerts: 38 },
-  { name: 'Thu', tickets: 22, alerts: 65 },
-  { name: 'Fri', tickets: 30, alerts: 48 },
-  { name: 'Sat', tickets: 10, alerts: 20 },
-  { name: 'Sun', tickets: 8, alerts: 15 },
-];
-
+import { computeWeeklyStats, DailyStat } from '../services/statsService';
 import { firestoreService } from '../services/firestoreService';
-
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
 
 export function Dashboard({ setActiveTab }: { setActiveTab: (tab: string) => void }) {
   const [stats, setStats] = React.useState<any>(null);
   const [alerts, setAlerts] = React.useState<Alert[]>([]);
+  const [chartData, setChartData] = React.useState<DailyStat[]>([]);
   const [loading, setLoading] = React.useState(true);
   const { t } = useLanguage();
 
@@ -72,6 +62,10 @@ export function Dashboard({ setActiveTab }: { setActiveTab: (tab: string) => voi
     const unsubscribeAlerts = firestoreService.subscribeToAlerts(user.uid, (data) => {
       setAlerts(data);
       setLoading(false);
+    });
+
+    computeWeeklyStats(user.uid).then(setChartData).catch(err => {
+      console.error('Failed to load weekly stats:', err);
     });
 
     fetchStats();
