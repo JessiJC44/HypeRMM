@@ -89,6 +89,23 @@ export default function App() {
   }, []);
 
   React.useEffect(() => {
+    const handleNav = () => setActiveTab('assets');
+    window.addEventListener('nav-to-assets', handleNav);
+    return () => window.removeEventListener('nav-to-assets', handleNav);
+  }, []);
+
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tab: string }>;
+      if (customEvent.detail?.tab) {
+        setActiveTab(customEvent.detail.tab);
+      }
+    };
+    window.addEventListener('hyperemote:navigate', handler);
+    return () => window.removeEventListener('hyperemote:navigate', handler);
+  }, []);
+
+  React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
@@ -156,8 +173,6 @@ export default function App() {
           }
           
           setUser(firebaseUser);
-          setTotpVerified(false);
-          setEmailCodeVerified(false);
         } else {
           setUser(null);
           setAuthMethod(null);
@@ -176,7 +191,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, [isMfaVerified]);
+  }, []);
 
   if (isAuthLoading) {
     return (
@@ -287,12 +302,6 @@ export default function App() {
       <EmailVerificationScreen user={user} onVerified={() => setNeedsEmailVerification(false)} />
     );
   }
-
-  React.useEffect(() => {
-    const handleNav = () => setActiveTab('assets');
-    window.addEventListener('nav-to-assets', handleNav);
-    return () => window.removeEventListener('nav-to-assets', handleNav);
-  }, []);
 
   const renderContent = () => {
     switch (activeTab) {

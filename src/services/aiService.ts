@@ -1,20 +1,20 @@
 import { GoogleGenAI } from "@google/genai";
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
-const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+const GROQ_KEY = process.env.GROQ_API_KEY;
 
 const GEMINI_MODEL = "gemini-2.5-flash";
-const OPENROUTER_MODEL = "qwen/qwen3.6-plus:free";
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 let gemini: GoogleGenAI | null = null;
 if (GEMINI_KEY && GEMINI_KEY !== "MY_GEMINI_API_KEY") {
   gemini = new GoogleGenAI({ apiKey: GEMINI_KEY });
 }
 
-const hasOpenRouter = (): boolean =>
-  !!OPENROUTER_KEY && OPENROUTER_KEY !== "MY_OPENROUTER_API_KEY";
+const hasGroq = (): boolean =>
+  !!GROQ_KEY && GROQ_KEY !== "MY_GROQ_API_KEY";
 
-const hasAnyProvider = (): boolean => !!gemini || hasOpenRouter();
+const hasAnyProvider = (): boolean => !!gemini || hasGroq();
 
 async function callGemini(prompt: string, systemInstruction?: string): Promise<string> {
   if (!gemini) throw new Error("Gemini not configured");
@@ -30,48 +30,47 @@ async function callGemini(prompt: string, systemInstruction?: string): Promise<s
   return response.text || "";
 }
 
-async function callOpenRouter(prompt: string, systemInstruction?: string): Promise<string> {
-  if (!hasOpenRouter()) throw new Error("OpenRouter not configured");
+async function callGroq(prompt: string, systemInstruction?: string): Promise<string> {
+  if (!hasGroq()) throw new Error("Groq not configured");
 
-  const messages: Array<{ role: string; content: string }> = [];
-  messages.push({
-    role: "system",
-    content:
-      systemInstruction ||
-      "You are a helpful IT Management Assistant for the HypeRemote platform. You help IT administrators manage devices, tickets, and system alerts. Keep your answers concise and professional.",
-  });
-  messages.push({ role: "user", content: prompt });
+  const messages: Array<{ role: string; content: string }> = [
+    {
+      role: "system",
+      content:
+        systemInstruction ||
+        "You are a helpful IT Management Assistant for the HypeRemote platform. You help IT administrators manage devices, tickets, and system alerts. Keep your answers concise and professional.",
+    },
+    { role: "user", content: prompt },
+  ];
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENROUTER_KEY}`,
-      "HTTP-Referer":
-        typeof window !== "undefined" ? window.location.origin : "https://hyperemote.local",
-      "X-Title": "HypeRemote",
+      Authorization: `Bearer ${GROQ_KEY}`,
     },
     body: JSON.stringify({
-      model: OPENROUTER_MODEL,
+      model: GROQ_MODEL,
       messages,
+      temperature: 0.7,
     }),
   });
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    throw new Error(`OpenRouter error ${response.status}: ${errorText.substring(0, 300)}`);
+    throw new Error(`Groq error ${response.status}: ${errorText.substring(0, 300)}`);
   }
 
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content;
-  if (!content) throw new Error("OpenRouter returned empty response");
+  if (!content) throw new Error("Groq returned empty response");
   return content;
 }
 
 async function callWithFallback(prompt: string, systemInstruction?: string): Promise<string> {
   if (!hasAnyProvider()) {
     throw new Error(
-      "No AI provider configured. Set GEMINI_API_KEY or OPENROUTER_API_KEY in your environment."
+      "No AI provider configured. Set GEMINI_API_KEY or GROQ_API_KEY in your environment."
     );
   }
 
@@ -81,12 +80,12 @@ async function callWithFallback(prompt: string, systemInstruction?: string): Pro
       if (result) return result;
       throw new Error("Gemini returned empty response");
     } catch (err) {
-      console.warn("Gemini call failed, falling back to OpenRouter:", err);
-      if (!hasOpenRouter()) throw err;
+      console.warn("Gemini call failed, falling back to Groq:", err);
+      if (!hasGroq()) throw err;
     }
   }
 
-  return callOpenRouter(prompt, systemInstruction);
+  return callGroq(prompt, systemInstruction);
 }
 
 export async function generateAIResponse(
@@ -136,12 +135,12 @@ export async function analyzeSystemStatus(stats: any, alerts: any[]): Promise<st
 
 export function getAIProviderStatus(): {
   gemini: boolean;
-  openrouter: boolean;
+  groq: boolean;
   anyAvailable: boolean;
 } {
   return {
     gemini: !!gemini,
-    openrouter: hasOpenRouter(),
+    groq: hasGroq(),
     anyAvailable: hasAnyProvider(),
   };
 }

@@ -196,7 +196,7 @@ export function NetworkDiscovery() {
              <button
               onClick={() => {
                 if (proxyCandidates.length === 0) {
-                  toast.error(t('network.no_proxy_available'));
+                  toast.error("Aucun agent proxy en ligne. Installez d'abord l'agent HypeRemote sur un appareil du réseau cible.");
                 } else {
                   setShowNewScanModal(true);
                 }
@@ -217,6 +217,34 @@ export function NetworkDiscovery() {
       </div>
 
       <div className="flex-1 overflow-auto p-6">
+        {!isLoading && proxyCandidates.length === 0 && (
+          <div className="max-w-7xl mx-auto px-6 pt-6">
+            <div className="rounded-2xl border-2 border-dashed border-amber-500/40 bg-amber-500/5 p-8 flex flex-col items-center text-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center">
+                <Network className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Aucun agent proxy disponible</h3>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  Pour scanner un réseau, installez d'abord l'agent HypeRemote sur au moins un
+                  appareil Windows, Linux ou macOS connecté à ce réseau. Cet appareil servira
+                  de relais pour la découverte des autres appareils.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('hyperemote:navigate', { detail: { tab: 'agent-download' } })
+                  );
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-medium shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-[0.98]"
+              >
+                <Plus className="w-4 h-4" />
+                Installer un agent
+              </button>
+            </div>
+          </div>
+        )}
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
           
           {/* Recent Scans Sidebar */}

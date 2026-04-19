@@ -143,16 +143,16 @@ export function SoftwareInventory() {
                         </div>
                       </td>
                       <td className="py-4 px-6 text-muted-foreground font-bold whitespace-nowrap">{sw.publisher}</td>
-                    <td className="py-4 px-6 text-muted-foreground font-bold whitespace-nowrap">{sw.version}</td>
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      <Badge variant="secondary" className="bg-brand-blue/10 text-brand-blue border-none text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-3 py-1 rounded-full">{sw.installCount || 0} devices</Badge>
-                    </td>
-                    <td className="py-4 px-6 text-right whitespace-nowrap">
-                      <Button variant="ghost" size="sm" className="text-brand-blue font-black uppercase text-[10px] tracking-widest hover:bg-brand-blue/5 gap-2 whitespace-nowrap h-9 px-4 rounded-xl">
-                        <ExternalLink size={14} />
-                        View Devices
-                      </Button>
-                    </td>
+                      <td className="py-4 px-6 text-muted-foreground font-bold whitespace-nowrap">{sw.version}</td>
+                      <td className="py-4 px-6 whitespace-nowrap">
+                        <Badge variant="secondary" className="bg-brand-blue/10 text-brand-blue border-none text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-3 py-1 rounded-full">{sw.installCount || 0} devices</Badge>
+                      </td>
+                      <td className="py-4 px-6 text-right whitespace-nowrap">
+                        <Button variant="ghost" size="sm" className="text-brand-blue font-black uppercase text-[10px] tracking-widest hover:bg-brand-blue/5 gap-2 whitespace-nowrap h-9 px-4 rounded-xl">
+                          <ExternalLink size={14} />
+                          View Devices
+                        </Button>
+                      </td>
                   </motion.tr>
                 );
               })
