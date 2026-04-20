@@ -81,6 +81,12 @@ function rowsToCsv(headers: string[], rows: (string | number | null)[][]): strin
   return [headers.join(','), ...rows.map(r => r.map(escape).join(','))].join('\n');
 }
 
+// Helper — requires admin role
+async function isUserAppAdmin(uid: string): Promise<boolean> {
+  const userDoc = await firestore.collection('users').doc(uid).get();
+  return userDoc.data()?.role === 'admin';
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -409,6 +415,250 @@ async function startServer() {
       res.status(200).send(csv);
     } catch (error) {
       res.status(500).json({ error: "Failed to generate report" });
+    }
+  });
+
+  // === AppCenter API ===
+
+  // GET /api/app-center/catalog — list all catalog entries
+  app.get("/api/app-center/catalog", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const snapshot = await firestore.collection('software_catalog')
+        .orderBy('category').orderBy('name').get();
+      const items = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      res.json(items);
+    } catch (error) {
+      console.error("Catalog fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch catalog" });
+    }
+  });
+
+  // GET /api/app-center/installed — aggregate count per catalog entry for current tenant
+  app.get("/api/app-center/installed", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      const snapshot = await firestore.collection('device_installed_software')
+        .where('userId', '==', uid).get();
+      const counts: Record<string, number> = {};
+      const deviceSet: Record<string, Set<string>> = {};
+      snapshot.forEach((doc: any) => {
+        const data = doc.data();
+        if (!data.catalogId) return;
+        if (!deviceSet[data.catalogId]) deviceSet[data.catalogId] = new Set();
+        deviceSet[data.catalogId].add(data.deviceId);
+      });
+      for (const catalogId in deviceSet) {
+        counts[catalogId] = deviceSet[catalogId].size;
+      }
+      // Total online devices in tenant for denominator
+      const devicesSnap = await firestore.collection('devices')
+        .where('userId', '==', uid).get();
+      res.json({ counts, totalDevices: devicesSnap.size });
+    } catch (error) {
+      console.error("Installed fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch installed counts" });
+    }
+  });
+
+  // GET /api/app-center/installed/:deviceId — list installed software for one device
+  app.get("/api/app-center/installed/:deviceId", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      const { deviceId } = req.params;
+      const deviceDoc = await firestore.collection('devices').doc(deviceId).get();
+      if (!deviceDoc.exists || deviceDoc.data()?.userId !== uid) {
+        return res.status(404).json({ error: "Device not found" });
+      }
+      const snapshot = await firestore.collection('device_installed_software')
+        .where('userId', '==', uid)
+        .where('deviceId', '==', deviceId)
+        .orderBy('name').get();
+      const items = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      res.json(items);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch device software" });
+    }
+  });
+
+  // POST /api/app-center/install — enqueue install command on selected devices
+  app.post("/api/app-center/install", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      const { catalogId, deviceIds } = req.body;
+      if (!catalogId || !Array.isArray(deviceIds) || deviceIds.length === 0) {
+        return res.status(400).json({ error: "catalogId and non-empty deviceIds required" });
+      }
+      const catalogDoc = await firestore.collection('software_catalog').doc(catalogId).get();
+      if (!catalogDoc.exists) return res.status(404).json({ error: "Catalog entry not found" });
+      const catalog = catalogDoc.data();
+
+      // Validate every device belongs to this user and is online
+      const deviceDocs = await Promise.all(
+        deviceIds.map((id: string) => firestore.collection('devices').doc(id).get())
+      );
+      const commandIds: string[] = [];
+      for (let i = 0; i < deviceDocs.length; i++) {
+        const deviceDoc = deviceDocs[i];
+        if (!deviceDoc.exists) continue;
+        const device = deviceDoc.data();
+        if (device?.userId !== uid) continue;
+        if (device?.status !== 'online') continue;
+        const os = device?.os || '';
+        let installConfig: any = null;
+        if (os.toLowerCase().includes('windows')) installConfig = catalog?.installCommands?.windows;
+        else if (os.toLowerCase().includes('mac') || os.toLowerCase().includes('darwin')) installConfig = catalog?.installCommands?.mac;
+        else if (os.toLowerCase().includes('linux')) installConfig = catalog?.installCommands?.linux;
+        if (!installConfig || !installConfig.packageId) continue;
+
+        const cmdRef = await firestore.collection('commands').add({
+          deviceId: deviceDoc.id,
+          userId: uid,
+          commandType: 'install_software',
+          payload: JSON.stringify({
+            catalogId,
+            name: catalog?.name,
+            source: installConfig.source,
+            packageId: installConfig.packageId,
+            customInstallScript: installConfig.customInstallScript || null,
+          }),
+          status: 'pending',
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        commandIds.push(cmdRef.id);
+      }
+      res.json({ commandIds, queuedCount: commandIds.length });
+    } catch (error) {
+      console.error("Install error:", error);
+      res.status(500).json({ error: "Failed to queue install" });
+    }
+  });
+
+  // POST /api/app-center/uninstall — enqueue uninstall command on selected devices
+  app.post("/api/app-center/uninstall", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      const { catalogId, deviceIds } = req.body;
+      if (!catalogId || !Array.isArray(deviceIds) || deviceIds.length === 0) {
+        return res.status(400).json({ error: "catalogId and non-empty deviceIds required" });
+      }
+      const catalogDoc = await firestore.collection('software_catalog').doc(catalogId).get();
+      if (!catalogDoc.exists) return res.status(404).json({ error: "Catalog entry not found" });
+      const catalog = catalogDoc.data();
+
+      const deviceDocs = await Promise.all(
+        deviceIds.map((id: string) => firestore.collection('devices').doc(id).get())
+      );
+      const commandIds: string[] = [];
+      for (const deviceDoc of deviceDocs) {
+        if (!deviceDoc.exists) continue;
+        const device = deviceDoc.data();
+        if (device?.userId !== uid) continue;
+        if (device?.status !== 'online') continue;
+        const os = device?.os || '';
+        let installConfig: any = null;
+        if (os.toLowerCase().includes('windows')) installConfig = catalog?.installCommands?.windows;
+        else if (os.toLowerCase().includes('mac') || os.toLowerCase().includes('darwin')) installConfig = catalog?.installCommands?.mac;
+        else if (os.toLowerCase().includes('linux')) installConfig = catalog?.installCommands?.linux;
+        if (!installConfig || !installConfig.packageId) continue;
+
+        const cmdRef = await firestore.collection('commands').add({
+          deviceId: deviceDoc.id,
+          userId: uid,
+          commandType: 'uninstall_software',
+          payload: JSON.stringify({
+            catalogId,
+            name: catalog?.name,
+            source: installConfig.source,
+            packageId: installConfig.packageId,
+          }),
+          status: 'pending',
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        commandIds.push(cmdRef.id);
+      }
+      res.json({ commandIds, queuedCount: commandIds.length });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to queue uninstall" });
+    }
+  });
+
+  // Admin-only catalog management
+  app.post("/api/app-center/catalog", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      if (!(await isUserAppAdmin(uid))) return res.status(403).json({ error: "Admin only" });
+      const { name, category, developer, logo, description, installCommands } = req.body;
+      if (!name || !category) return res.status(400).json({ error: "name and category required" });
+      const docRef = await firestore.collection('software_catalog').add({
+        name, category, developer: developer || '', logo: logo || '',
+        description: description || '',
+        installCommands: installCommands || {},
+        isBuiltIn: false,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      res.json({ id: docRef.id });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create catalog entry" });
+    }
+  });
+
+  app.patch("/api/app-center/catalog/:id", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      if (!(await isUserAppAdmin(uid))) return res.status(403).json({ error: "Admin only" });
+      const updates: any = { ...req.body, updatedAt: FieldValue.serverTimestamp() };
+      delete updates.id; delete updates.createdAt; delete updates.isBuiltIn;
+      await firestore.collection('software_catalog').doc(req.params.id).update(updates);
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update" });
+    }
+  });
+
+  app.delete("/api/app-center/catalog/:id", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { uid } = req.user;
+      if (!(await isUserAppAdmin(uid))) return res.status(403).json({ error: "Admin only" });
+      const doc = await firestore.collection('software_catalog').doc(req.params.id).get();
+      if (doc.data()?.isBuiltIn) return res.status(400).json({ error: "Cannot delete built-in entry" });
+      await firestore.collection('software_catalog').doc(req.params.id).delete();
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete" });
+    }
+  });
+
+  // Agent-only — receives the inventory sync after install/uninstall
+  app.post("/api/agent/installed-software-sync", verifyAgentJWT, async (req: any, res) => {
+    try {
+      const { deviceId, userId } = req.agent;
+      const { software } = req.body; // Array of { name, version, catalogId?: string }
+      if (!Array.isArray(software)) return res.status(400).json({ error: "software array required" });
+
+      // Replace the device's inventory atomically
+      const batch = firestore.batch();
+      const existing = await firestore.collection('device_installed_software')
+        .where('userId', '==', userId)
+        .where('deviceId', '==', deviceId).get();
+      existing.forEach((doc: any) => batch.delete(doc.ref));
+
+      for (const item of software) {
+        const ref = firestore.collection('device_installed_software').doc();
+        batch.set(ref, {
+          userId, deviceId,
+          catalogId: item.catalogId || null,
+          name: item.name,
+          version: item.version || '',
+          installedAt: item.installedAt ? new Date(item.installedAt) : FieldValue.serverTimestamp(),
+          lastSeenAt: FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      res.json({ ok: true, count: software.length });
+    } catch (error) {
+      console.error("Inventory sync error:", error);
+      res.status(500).json({ error: "Failed to sync inventory" });
     }
   });
 
@@ -1059,6 +1309,180 @@ async function startServer() {
     await batch.commit();
     console.log(`✅ Cleaned up ${snapshot.size} heartbeats.`);
   });
+
+  // Seed Catalog
+  const seedCatalog = async () => {
+    try {
+      const snap = await firestore.collection("software_catalog").where('isBuiltIn', '==', true).get();
+      if (!snap.empty) return;
+
+      const apps = [
+        {
+          name: 'Flux', category: 'Remote Access', developer: 'HypeRemote',
+          logo: 'Flux', description: 'Remote desktop and management agent.',
+          installCommands: {
+            windows: { source: 'custom_url', packageId: 'hyperemote-agent-windows.exe',
+              customInstallScript: 'Invoke-WebRequest https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-windows.exe -OutFile agent.exe; Start-Process agent.exe -Wait' },
+            mac: { source: 'custom_url', packageId: 'hyperemote-agent-mac-arm',
+              customInstallScript: 'curl -sSL https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-mac-arm -o agent && chmod +x agent && ./agent' },
+            linux: { source: 'custom_url', packageId: 'hyperemote-agent-linux',
+              customInstallScript: 'curl -sSL https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-linux -o agent && chmod +x agent && ./agent' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: 'Chocolatey', category: 'Package Manager', developer: 'Chocolatey Software',
+          logo: 'Chocolatey', description: 'Package manager for Windows.',
+          installCommands: {
+            windows: { source: 'custom_url', packageId: 'chocolatey-bootstrap',
+              customInstallScript: "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))" },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: 'Homebrew', category: 'Package Manager', developer: 'Homebrew',
+          logo: 'Homebrew', description: 'Package manager for macOS and Linux.',
+          installCommands: {
+            mac: { source: 'custom_url', packageId: 'homebrew-bootstrap',
+              customInstallScript: '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"' },
+            linux: { source: 'custom_url', packageId: 'homebrew-bootstrap',
+              customInstallScript: '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: 'Node.js LTS', category: 'Runtime', developer: 'OpenJS Foundation',
+          logo: 'NodeJS', description: 'JavaScript runtime built on V8.',
+          installCommands: {
+            windows: { source: 'winget', packageId: 'OpenJS.NodeJS.LTS' },
+            mac: { source: 'homebrew', packageId: 'node@20' },
+            linux: { source: 'apt', packageId: 'nodejs' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: 'Python 3', category: 'Runtime', developer: 'Python Software Foundation',
+          logo: 'Python', description: 'Python programming language.',
+          installCommands: {
+            windows: { source: 'winget', packageId: 'Python.Python.3.12' },
+            mac: { source: 'homebrew', packageId: 'python@3.12' },
+            linux: { source: 'apt', packageId: 'python3' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: 'Git', category: 'Version Control', developer: 'Git',
+          logo: 'Git', description: 'Distributed version control system.',
+          installCommands: {
+            windows: { source: 'winget', packageId: 'Git.Git' },
+            mac: { source: 'homebrew', packageId: 'git' },
+            linux: { source: 'apt', packageId: 'git' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: 'Visual Studio Code', category: 'IDE', developer: 'Microsoft',
+          logo: 'VSCode', description: 'Code editor redefined.',
+          installCommands: {
+            windows: { source: 'winget', packageId: 'Microsoft.VisualStudioCode' },
+            mac: { source: 'homebrew_cask', packageId: 'visual-studio-code' },
+            linux: { source: 'snap', packageId: 'code' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: '7-Zip', category: 'Utility', developer: 'Igor Pavlov',
+          logo: '7Zip', description: 'File archiver with high compression ratio.',
+          installCommands: {
+            windows: { source: 'winget', packageId: '7zip.7zip' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: 'Firefox', category: 'Browser', developer: 'Mozilla',
+          logo: 'Firefox', description: 'Free and open-source web browser.',
+          installCommands: {
+            windows: { source: 'winget', packageId: 'Mozilla.Firefox' },
+            mac: { source: 'homebrew_cask', packageId: 'firefox' },
+            linux: { source: 'apt', packageId: 'firefox' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: 'Google Chrome', category: 'Browser', developer: 'Google',
+          logo: 'Chrome', description: 'Fast, secure, free web browser.',
+          installCommands: {
+            windows: { source: 'winget', packageId: 'Google.Chrome' },
+            mac: { source: 'homebrew_cask', packageId: 'google-chrome' },
+            linux: { source: 'custom_url', packageId: 'chrome-deb',
+              customInstallScript: 'wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && sudo apt install -y ./google-chrome-stable_current_amd64.deb' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: '1Password', category: 'Security', developer: 'AgileBits',
+          logo: '1Password', description: 'Password manager.',
+          installCommands: {
+            windows: { source: 'winget', packageId: 'AgileBits.1Password' },
+            mac: { source: 'homebrew_cask', packageId: '1password' },
+            linux: { source: 'custom_url', packageId: '1password-linux',
+              customInstallScript: 'curl -sS https://downloads.1password.com/linux/keys/1password.asc | sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/amd64 stable main" | sudo tee /etc/apt/sources.list.d/1password.list && sudo apt update && sudo apt install -y 1password' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: 'Bitwarden', category: 'Security', developer: 'Bitwarden',
+          logo: 'Bitwarden', description: 'Open-source password manager.',
+          installCommands: {
+            windows: { source: 'winget', packageId: 'Bitwarden.Bitwarden' },
+            mac: { source: 'homebrew_cask', packageId: 'bitwarden' },
+            linux: { source: 'snap', packageId: 'bitwarden' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: 'Wireshark', category: 'Network', developer: 'Wireshark Foundation',
+          logo: 'Wireshark', description: 'Network protocol analyzer.',
+          installCommands: {
+            windows: { source: 'winget', packageId: 'WiresharkFoundation.Wireshark' },
+            mac: { source: 'homebrew_cask', packageId: 'wireshark' },
+            linux: { source: 'apt', packageId: 'wireshark' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: 'Notion', category: 'Productivity', developer: 'Notion Labs',
+          logo: 'Notion', description: 'All-in-one workspace.',
+          installCommands: {
+            windows: { source: 'winget', packageId: 'Notion.Notion' },
+            mac: { source: 'homebrew_cask', packageId: 'notion' },
+          },
+          isBuiltIn: true,
+        },
+        {
+          name: 'Docker Desktop', category: 'Developer Tools', developer: 'Docker Inc.',
+          logo: 'Docker', description: 'Containers for everyone.',
+          installCommands: {
+            windows: { source: 'winget', packageId: 'Docker.DockerDesktop' },
+            mac: { source: 'homebrew_cask', packageId: 'docker' },
+          },
+          isBuiltIn: true,
+        },
+      ];
+
+      for (const appData of apps) {
+        await firestore.collection("software_catalog").add({
+          ...appData,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+      console.log("Software catalog seeded.");
+    } catch (e) {
+      console.error("Failed to seed catalog", e);
+    }
+  };
+  seedCatalog();
 }
 
 startServer();

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Download, 
@@ -37,6 +38,7 @@ export function AgentDownload() {
   const [selectedOS, setSelectedOS] = React.useState<'windows' | 'linux' | 'mac'>('windows');
   const user = auth.currentUser;
 
+  const AGENT_VERSION = 'v0.1.0';
   const userId = user?.uid || 'YOUR_USER_ID';
   const baseUrl = 'https://github.com/JessiJC44/HypeRMM/releases/latest/download';
 
@@ -74,7 +76,12 @@ export function AgentDownload() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <h1 className="text-2xl lg:text-3xl font-bold">Install Agent</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl lg:text-3xl font-bold">Install Agent</h1>
+          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+            {AGENT_VERSION}
+          </Badge>
+        </div>
         <p className="text-muted-foreground">Deploy the HypeRemote agent on devices you want to manage</p>
       </motion.div>
 

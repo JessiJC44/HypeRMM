@@ -285,6 +285,103 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "credentialID", "publicKey"]
+    },
+    "SoftwareCatalog": {
+      "title": "SoftwareCatalog",
+      "description": "Global software catalog for AppCenter",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "developer": { "type": "string" },
+        "logo": { "type": "string" },
+        "description": { "type": "string" },
+        "versions": { "type": "array", "items": { "type": "object" } },
+        "installCommands": { "type": "object" },
+        "isBuiltIn": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "category", "installCommands"]
+    },
+    "DeviceInstalledSoftware": {
+      "title": "DeviceInstalledSoftware",
+      "description": "Software installed on a specific device",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "catalogId": { "type": "string" },
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "installedAt": { "type": "string", "format": "date-time" },
+        "lastSeenAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "deviceId", "name"]
+    },
+    "SnmpTemplate": {
+      "title": "SnmpTemplate",
+      "description": "Template for monitoring SNMP devices",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "deviceType": { "type": "string" },
+        "description": { "type": "string" },
+        "oids": { "type": "array", "items": { "type": "object" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "deviceType", "oids"]
+    },
+    "SnmpDevice": {
+      "title": "SnmpDevice",
+      "description": "Network device monitored via SNMP",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "hostname": { "type": "string" },
+        "ipAddress": { "type": "string" },
+        "port": { "type": "number" },
+        "snmpVersion": { "type": "string" },
+        "communityString": { "type": "string" },
+        "v3Config": { "type": "object" },
+        "templateId": { "type": "string" },
+        "proxyAgentId": { "type": "string" },
+        "status": { "type": "string" },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "oidValues": { "type": "object" }
+      },
+      "required": ["name", "ipAddress", "templateId", "proxyAgentId"]
+    },
+    "ThresholdProfile": {
+      "title": "ThresholdProfile",
+      "description": "Profile defining alert thresholds for devices",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "isDefault": { "type": "boolean" },
+        "assignedTo": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name"]
+    },
+    "AutomationProfile": {
+      "title": "AutomationProfile",
+      "description": "IT automation policies and schedules",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "active": { "type": "boolean" },
+        "tasks": { "type": "object" },
+        "schedules": { "type": "array" },
+        "assignedTo": { "type": "object" },
+        "nextExecution": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "tasks", "schedules"]
     }
   },
   "firestore": {
@@ -359,6 +456,30 @@
     "/passkeys/{docId}": {
       "schema": "Passkey",
       "description": "User biometric passkeys"
+    },
+    "/software_catalog/{catalogId}": {
+      "schema": "SoftwareCatalog",
+      "description": "AppCenter catalog"
+    },
+    "/device_installed_software/{id}": {
+      "schema": "DeviceInstalledSoftware",
+      "description": "Per-device software inventory"
+    },
+    "/snmp_templates/{id}": {
+      "schema": "SnmpTemplate",
+      "description": "SNMP Custom Templates"
+    },
+    "/snmp_devices/{id}": {
+      "schema": "SnmpDevice",
+      "description": "Managed SNMP Devices"
+    },
+    "/threshold_profiles/{id}": {
+      "schema": "ThresholdProfile",
+      "description": "Threshold Profiles"
+    },
+    "/automation_profiles/{id}": {
+      "schema": "AutomationProfile",
+      "description": "IT Automation Policies"
     }
   }
 }

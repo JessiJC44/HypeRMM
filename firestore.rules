@@ -37,13 +37,6 @@ service cloud.firestore {
 
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
-    
-    // Validation helper for creating documents
-    function isValidKnowledgeBaseArticle(data) {
-      return data.title is string && data.title.size() <= 200 &&
-             data.category is string && data.category.size() <= 100 &&
-             data.content is string && data.content.size() <= 50000;
-    }
 
     // ===============================================================
     // Collection Rules
@@ -51,8 +44,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && 
-                      incoming().role == 'user';
+      allow create: if isOwner(userId) && incoming().role == 'user';
       allow update: if isOwner(userId) && 
                       incoming().role == existing().role &&
                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phoneNumber', 'lastLogin']);
@@ -62,14 +54,13 @@ service cloud.firestore {
     match /devices/{deviceId} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow write: if false; // Writes only via Admin SDK
+      allow write: if false; 
     }
 
     match /tickets/{ticketId} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && incoming().userId == request.auth.uid && 
-                      incoming().title is string && incoming().title.size() <= 256;
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
       allow update: if (isAdmin() || (isSignedIn() && existing().userId == request.auth.uid)) &&
                       incoming().userId == existing().userId;
       allow delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
@@ -94,26 +85,86 @@ service cloud.firestore {
 
     match /device_heartbeats/{heartbeatId} {
       allow read, list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow write: if false; // Read-only for users
+      allow write: if false;
     }
 
-    // Default catch-all for other collections defined in blueprint but not explicitly matched
-    // (Should be handled by the global deny at the top)
-    
-    // Commands, Logs, Enrollment Tokens, Scripts, script_runs, network_scans, results
-    // are all restricted to Admin role or specific userId match via the pattern above.
-    
     match /passkeys/{docId} { 
       allow read, list: if isAdmin() || isDocOwner();
       allow create: if isSignedIn() && incoming().userId == request.auth.uid;
       allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
     }
-    
-    match /commands/{docId} { allow read, list: if isAdmin() || isDocOwner(); }
+
+    // AppCenter
+    match /software_catalog/{catalogId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin() && resource.data.isBuiltIn != true;
+    }
+
+    match /device_installed_software/{id} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // SNMP
+    match /snmp_templates/{id} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+    }
+    match /snmp_devices/{id} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+    }
+    match /snmp_oid_history/{id} {
+      allow read: if isDocOwner() || isAdmin();
+      allow write: if false;
+    }
+    match /snmp_shared_templates/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Thresholds
+    match /threshold_profiles/{profileId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+      
+      match /items/{itemId} {
+        allow read: if get(/databases/$(database)/documents/threshold_profiles/$(profileId)).data.userId == request.auth.uid || isAdmin();
+        allow write: if isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/threshold_profiles/$(profileId)).data.userId == request.auth.uid);
+      }
+    }
+    match /device_folders/{folderId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+    }
+
+    // Automation
+    match /automation_profiles/{id} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+    }
+    match /automation_executions/{id} {
+      allow read: if isDocOwner() || isAdmin();
+      allow write: if false;
+    }
+    match /software_bundles/{id} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+    }
+
+    // Agent Tools
+    match /commands/{docId} { allow read, list: if isAdmin() || isDocOwner(); allow create: if isAdmin(); }
     match /device_logs/{docId} { allow read, list: if isAdmin() || isDocOwner(); }
-    match /scripts/{docId} { allow read, list: if isAdmin() || isDocOwner(); }
+    match /scripts/{docId} { allow read, list: if isAdmin() || isDocOwner(); allow create: if isSignedIn(); }
     match /script_runs/{docId} { allow read, list: if isAdmin() || isDocOwner(); }
-    match /network_scans/{docId} { allow read, list: if isAdmin() || isDocOwner(); }
+    match /network_scans/{docId} { allow read, list: if isAdmin() || isDocOwner(); allow create: if isSignedIn(); }
     match /network_scan_results/{docId} { allow read, list: if isAdmin() || isDocOwner(); }
     
     match /shared_scripts/{docId} {
