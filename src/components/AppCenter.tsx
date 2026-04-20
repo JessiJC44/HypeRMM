@@ -65,9 +65,15 @@ export function AppCenter() {
           headers: { 'Authorization': `Bearer ${idToken}` }
         });
         const data = await res.json();
-        setCatalog(data);
+        if (Array.isArray(data)) {
+          setCatalog(data);
+        } else {
+          setCatalog([]);
+          console.error('Catalog data is not an array:', data);
+        }
       } catch (err) {
         console.error(err);
+        setCatalog([]);
         toast.error('Failed to load software catalog');
       } finally {
         setLoading(false);
@@ -81,8 +87,15 @@ export function AppCenter() {
           headers: { 'Authorization': `Bearer ${idToken}` }
         });
         const data = await res.json();
-        setStats(data);
-      } catch (err) {}
+        if (data && typeof data === 'object') {
+          setStats({
+            counts: data.counts || {},
+            totalDevices: typeof data.totalDevices === 'number' ? data.totalDevices : 0
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching stats:', err);
+      }
     };
 
     fetchCatalog();
