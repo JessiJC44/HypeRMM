@@ -1,0 +1,18 @@
+const fs = require('fs');
+const path = require('path');
+
+const dir = '/app/applet/scripts';
+console.log('Listing:', dir);
+try {
+    const files = fs.readdirSync(dir);
+    files.forEach(f => {
+        console.log(`Length: ${f.length}, Name: ${f.substring(0, 50)}...`);
+        if (f.length > 100) {
+            const fullPath = path.join(dir, f);
+            console.log('Found oversized:', fullPath);
+            fs.unlinkSync(fullPath);
+        }
+    });
+} catch (e) {
+    console.error(e);
+}

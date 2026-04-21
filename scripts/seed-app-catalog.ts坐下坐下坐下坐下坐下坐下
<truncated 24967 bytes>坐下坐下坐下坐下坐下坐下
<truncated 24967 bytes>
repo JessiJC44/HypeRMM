@@ -1,7 +1,11 @@
-import * as admin from 'firebase-admin';
+import { initializeApp } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import firebaseConfig from '../firebase-applet-config.json' assert { type: 'json' };
 
-admin.initializeApp();
-const db = admin.firestore();
+initializeApp({
+  projectId: firebaseConfig.projectId
+});
+const db = getFirestore(firebaseConfig.firestoreDatabaseId);
 
 const CATALOG = [
   {
@@ -61,8 +65,8 @@ async function seed() {
   for (const entry of CATALOG) {
     await db.collection('software_catalog').add({
       ...entry,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
     console.log(`✓ ${entry.name}`);
   }
