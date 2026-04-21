@@ -7,6 +7,7 @@ require (
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/j-keck/arping v1.0.3
 	github.com/shirou/gopsutil/v3 v3.23.12
+	github.com/gosnmp/gosnmp v1.37.0
 )
 
 require (

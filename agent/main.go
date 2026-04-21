@@ -22,6 +22,7 @@ import (
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/net"
+	"github.com/gosnmp/gosnmp"
 )
 
 const (
@@ -809,14 +810,183 @@ func executeUninstallSoftware(payload string) (string, error) {
 }
 
 func syncSoftware() {
-	// Dummy for now, would list installed apps and POST to /api/agent/installed-software-sync
-	log.Println("Syncing software inventory...")
+    software := collectInstalledSoftware()
+    if len(software) == 0 {
+        log.Println("No installed software detected, skipping sync")
+        return
+    }
+    body, err := json.Marshal(map[string]interface{}{"software": software})
+    if err != nil {
+        log.Printf("syncSoftware marshal failed: %v", err)
+        return
+    }
+    url := fmt.Sprintf("%s/api/agent/installed-software-sync", config.ServerURL)
+    req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+    if err != nil {
+        log.Printf("syncSoftware request failed: %v", err)
+        return
+    }
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Authorization", "Bearer "+config.AgentJWT)
+    client := &http.Client{Timeout: 30 * time.Second}
+    resp, err := client.Do(req)
+    if err != nil {
+        log.Printf("syncSoftware POST failed: %v", err)
+        return
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode != 200 {
+        log.Printf("syncSoftware non-200 response: %d", resp.StatusCode)
+    } else {
+        log.Printf("syncSoftware: synced %d packages", len(software))
+    }
+}
+
+func collectInstalledSoftware() []map[string]string {
+    results := []map[string]string{}
+    switch runtime.GOOS {
+    case "windows":
+        cmd := exec.Command("powershell", "-NoProfile", "-Command",
+            `Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*, HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName } | Select-Object DisplayName, DisplayVersion | ConvertTo-Json -Compress`)
+        out, _ := cmd.Output()
+        var entries []map[string]interface{}
+        if err := json.Unmarshal(out, &entries); err == nil {
+            for _, e := range entries {
+                name, _ := e["DisplayName"].(string)
+                version, _ := e["DisplayVersion"].(string)
+                if name != "" {
+                    results = append(results, map[string]string{"name": name, "version": version})
+                }
+            }
+        } else {
+            // Single-entry case (PowerShell returns object instead of array)
+            var single map[string]interface{}
+            if err := json.Unmarshal(out, &single); err == nil {
+                name, _ := single["DisplayName"].(string)
+                version, _ := single["DisplayVersion"].(string)
+                if name != "" {
+                    results = append(results, map[string]string{"name": name, "version": version})
+                }
+            }
+        }
+    case "darwin":
+        out, _ := exec.Command("bash", "-c", "brew list --versions 2>/dev/null").Output()
+        for _, line := range strings.Split(string(out), "\n") {
+            parts := strings.Fields(line)
+            if len(parts) >= 1 && parts[0] != "" {
+                version := ""
+                if len(parts) >= 2 { version = parts[1] }
+                results = append(results, map[string]string{"name": parts[0], "version": version})
+            }
+        }
+        outCask, _ := exec.Command("bash", "-c", "brew list --cask --versions 2>/dev/null").Output()
+        for _, line := range strings.Split(string(outCask), "\n") {
+            parts := strings.Fields(line)
+            if len(parts) >= 1 && parts[0] != "" {
+                version := ""
+                if len(parts) >= 2 { version = parts[1] }
+                results = append(results, map[string]string{"name": parts[0], "version": version})
+            }
+        }
+    case "linux":
+        out, _ := exec.Command("bash", "-c",
+            "dpkg-query -W -f='${Package}\\t${Version}\\n' 2>/dev/null || rpm -qa --queryformat '%{NAME}\\t%{VERSION}\\n' 2>/dev/null").Output()
+        for _, line := range strings.Split(string(out), "\n") {
+            parts := strings.Split(line, "\t")
+            if len(parts) >= 2 && parts[0] != "" {
+                results = append(results, map[string]string{"name": parts[0], "version": parts[1]})
+            }
+        }
+    }
+    return results
 }
 
 func executeSnmpPoll(payload string) (string, error) {
-	// Requires gosnmp. This is a skeleton as I can't easily add complex Go dependencies in one turn without build tool.
-	// But I will provide the skeleton.
-	return "SNMP Polling not fully implemented in this agent build (requires gosnmp)", nil
+    var p struct {
+        SnmpDeviceID string `json:"snmpDeviceId"`
+        Host         string `json:"host"`
+        Port         int    `json:"port"`
+        Version      string `json:"version"`
+        Community    string `json:"community"`
+        V3Config     *struct {
+            Username     string `json:"username"`
+            AuthProtocol string `json:"authProtocol"`
+            AuthKey      string `json:"authKey"`
+            PrivProtocol string `json:"privProtocol"`
+            PrivKey      string `json:"privKey"`
+        } `json:"v3Config"`
+        Oids []struct {
+            Name string `json:"name"`
+            Oid  string `json:"oid"`
+        } `json:"oids"`
+    }
+    if err := json.Unmarshal([]byte(payload), &p); err != nil {
+        return "", err
+    }
+
+    snmp := &gosnmp.GoSNMP{
+        Target: p.Host, Port: uint16(p.Port), Timeout: 5 * time.Second, Retries: 1,
+    }
+    switch p.Version {
+    case "v1":
+        snmp.Version = gosnmp.Version1
+        snmp.Community = p.Community
+    case "v3":
+        snmp.Version = gosnmp.Version3
+        snmp.SecurityModel = gosnmp.UserSecurityModel
+        if p.V3Config != nil {
+            snmp.MsgFlags = gosnmp.AuthPriv
+            snmp.SecurityParameters = &gosnmp.UsmSecurityParameters{
+                UserName:                 p.V3Config.Username,
+                AuthenticationProtocol:   gosnmp.SHA,
+                AuthenticationPassphrase: p.V3Config.AuthKey,
+                PrivacyProtocol:          gosnmp.AES,
+                PrivacyPassphrase:        p.V3Config.PrivKey,
+            }
+        }
+    default:
+        snmp.Version = gosnmp.Version2c
+        snmp.Community = p.Community
+    }
+
+    if err := snmp.Connect(); err != nil {
+        postSnmpResult(p.SnmpDeviceID, nil, err.Error())
+        return "", err
+    }
+    defer snmp.Conn.Close()
+
+    values := map[string]interface{}{}
+    var errs []string
+    for _, o := range p.Oids {
+        result, err := snmp.Get([]string{o.Oid})
+        if err != nil {
+            errs = append(errs, fmt.Sprintf("%s: %v", o.Name, err))
+            continue
+        }
+        if len(result.Variables) > 0 {
+            v := result.Variables[0]
+            switch v.Type {
+            case gosnmp.OctetString:
+                values[o.Name] = string(v.Value.([]byte))
+            default:
+                values[o.Name] = v.Value
+            }
+        }
+    }
+    errMsg := ""
+    if len(errs) > 0 { errMsg = strings.Join(errs, "; ") }
+    postSnmpResult(p.SnmpDeviceID, values, errMsg)
+    return fmt.Sprintf("Polled %d OIDs (%d errors)", len(values), len(errs)), nil
+}
+
+func postSnmpResult(snmpDeviceId string, values map[string]interface{}, errMsg string) {
+    body, _ := json.Marshal(map[string]interface{}{
+        "snmpDeviceId": snmpDeviceId, "values": values, "error": errMsg,
+    })
+    req, _ := http.NewRequest("POST", config.ServerURL+"/api/agent/snmp-poll-result", bytes.NewReader(body))
+    req.Header.Set("Authorization", "Bearer "+config.AgentJWT)
+    req.Header.Set("Content-Type", "application/json")
+    http.DefaultClient.Do(req)
 }
 
 func executeAutomationProfile(payload string) (string, error) {

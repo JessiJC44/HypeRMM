@@ -11,12 +11,154 @@ import { getAuth } from "firebase-admin/auth";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import cron from "node-cron";
+import { encrypt as snmpEncrypt, decrypt as snmpDecrypt } from './src/lib/snmpCrypto.ts';
+import firebaseConfig from './firebase-applet-config.json' assert { type: 'json' };
 
 dotenv.config();
 
-// Firebase Admin Setup (using Application Default Credentials)
-initializeApp();
-const firestore = getFirestore();
+// Firebase Admin Setup
+initializeApp({
+  projectId: firebaseConfig.projectId,
+});
+const firestore = getFirestore(firebaseConfig.firestoreDatabaseId);
+
+const THRESHOLD_PRESETS: Record<string, any> = {
+  cpu_high: { category: 'performance', severity: 'warning', operator: '>', threshold: 90, duration: 300 },
+  memory_high: { category: 'performance', severity: 'warning', operator: '>', threshold: 85, duration: 300 },
+  disk_low: { category: 'disk', severity: 'critical', operator: '<', threshold: 10, duration: 0 },
+  service_stopped: { category: 'availability', severity: 'critical', duration: 0 },
+  software_installed: { category: 'security', severity: 'information', duration: 0 },
+  software_uninstalled: { category: 'security', severity: 'information', duration: 0 },
+  failed_login_attempts: { category: 'security', severity: 'warning', operator: '>', threshold: 3, duration: 300 },
+  machine_offline: { category: 'availability', severity: 'critical', duration: 300 },
+  antivirus_disabled: { category: 'security', severity: 'critical', duration: 0 },
+  high_ram_pressure: { category: 'performance', severity: 'warning', operator: '>', threshold: 90, duration: 300 },
+};
+
+async function evaluateThresholds(deviceId: string, userId: string, metrics: any) {
+  try {
+    const thresholdsSnap = await firestore.collection('device_thresholds')
+      .where('deviceId', '==', deviceId)
+      .where('enabled', '==', true)
+      .get();
+
+    for (const doc of thresholdsSnap.docs) {
+      const threshold = doc.data();
+      const preset = THRESHOLD_PRESETS[threshold.presetId];
+      if (!preset) continue;
+
+      let value: number | null = null;
+      if (threshold.presetId === 'cpu_high') value = metrics.cpu;
+      else if (threshold.presetId === 'memory_high' || threshold.presetId === 'high_ram_pressure') {
+        if (metrics.ramTotal > 0) value = (metrics.ramUsed / metrics.ramTotal) * 100;
+      } else if (threshold.presetId === 'disk_low') {
+        if (metrics.diskTotal > 0) value = ((metrics.diskTotal - metrics.diskUsed) / metrics.diskTotal) * 100;
+      }
+
+      if (value !== null) {
+        const triggered = preset.operator === '>' ? value > preset.threshold : value < preset.threshold;
+        if (triggered) {
+          // Check if we should create an alert (deduplication/duration logic could go here)
+          await firestore.collection('alerts').add({
+            userId, deviceId,
+            type: threshold.presetId,
+            severity: preset.severity,
+            message: `${threshold.name || threshold.presetId} triggered: ${value.toFixed(1)}% ${preset.operator} ${preset.threshold}%`,
+            status: 'active',
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Threshold evaluation error:", err);
+  }
+}
+
+function handleCronError(label: string, err: any) {
+  if (err?.message?.includes('Cloud Firestore API has not been used')) {
+    console.error(`[NODE-CRON] [ERROR] ${label}: Cloud Firestore API is disabled. Please follow the link in your console to enable it.`);
+  } else if (err?.message?.includes('Missing or insufficient permissions')) {
+    console.error(`[NODE-CRON] [ERROR] ${label}: Permission denied. Ensure your Firebase configuration matches the current environment.`);
+  } else {
+    console.error(`[NODE-CRON] [ERROR] ${label}:`, err);
+  }
+}
+
+// Background cleanup worker (every hour)
+cron.schedule('0 * * * *', async () => {
+  try {
+    console.log("Running hourly cleanup...");
+    const oneHourAgo = new Date(Date.now() - 3600000);
+    
+    // Mark offline devices
+    const offlineSnap = await firestore.collection('devices')
+      .where('status', '==', 'online')
+      .where('lastSeen', '<', Timestamp.fromDate(oneHourAgo))
+      .get();
+      
+    if (!offlineSnap.empty) {
+      const batch = firestore.batch();
+      offlineSnap.forEach(doc => {
+        batch.update(doc.ref, { status: 'offline' });
+      });
+      await batch.commit();
+      console.log(`Marked ${offlineSnap.size} devices as offline.`);
+    }
+  } catch (err) {
+    handleCronError('Cleanup worker', err);
+  }
+});
+
+// SNMP Polling worker (every minute)
+cron.schedule("* * * * *", async () => {
+  try {
+    const devicesSnap = await firestore.collection('snmp_devices')
+      .where('enabled', '==', true)
+      .get();
+      
+    for (const doc of devicesSnap.docs) {
+      const device = doc.data();
+      const lastPolled = device.lastPolledAt?.toDate() || new Date(0);
+      const intervalMs = (device.pollingInterval || 300) * 1000;
+      
+      if (Date.now() - lastPolled.getTime() >= intervalMs) {
+        // Find an online agent in the same tenant to perform the poll
+        const agentSnap = await firestore.collection('devices')
+          .where('userId', '==', device.userId)
+          .where('status', '==', 'online')
+          .limit(1)
+          .get();
+          
+        if (!agentSnap.empty) {
+          const agentId = agentSnap.docs[0].id;
+          const config = JSON.parse(snmpDecrypt(device.encryptedConfig));
+          
+          await firestore.collection('commands').add({
+            deviceId: agentId,
+            userId: device.userId,
+            commandType: 'snmp_poll',
+            payload: JSON.stringify({
+              snmpDeviceId: doc.id,
+              host: device.host,
+              port: device.port || 161,
+              version: device.version || 'v2c',
+              community: config.community,
+              v3Config: config.v3Config,
+              oids: device.oids || [],
+            }),
+            status: 'pending',
+            createdAt: FieldValue.serverTimestamp(),
+          });
+          
+          await doc.ref.update({ lastPolledAt: FieldValue.serverTimestamp() });
+        }
+      }
+    }
+  } catch (err) {
+    handleCronError('SNMP polling worker', err);
+  }
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -224,6 +366,9 @@ async function startServer() {
 
       await firestore.collection("devices").doc(agentId).update(data);
 
+      // Trigger threshold evaluation
+      void evaluateThresholds(agentId, req.agent.tenantId, data);
+
       res.json({ status: "ok" });
     } catch (error) {
       console.error("❌ Heartbeat error:", error);
@@ -424,12 +569,107 @@ async function startServer() {
   app.get("/api/app-center/catalog", verifyFirebaseToken, async (req: any, res) => {
     try {
       const snapshot = await firestore.collection('software_catalog')
-        .orderBy('category').orderBy('name').get();
+        .orderBy('name').get(); // Simplified sort
       const items = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       res.json(items);
     } catch (error) {
       console.error("Catalog fetch error:", error);
       res.status(500).json({ error: "Failed to fetch catalog" });
+    }
+  });
+
+  // === SNMP API ===
+
+  app.get("/api/snmp/devices", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const snap = await firestore.collection('snmp_devices')
+        .where('userId', '==', req.user.uid).get();
+      res.json(snap.docs.map(d => ({ id: d.id, ...d.data(), encryptedConfig: undefined })));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch SNMP devices" });
+    }
+  });
+
+  app.post("/api/snmp/devices", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { name, host, port, version, community, v3Config, oids } = req.body;
+      const encryptedConfig = snmpEncrypt(JSON.stringify({ community, v3Config }));
+      
+      const docRef = await firestore.collection('snmp_devices').add({
+        userId: req.user.uid,
+        name, host, port, version, oids,
+        encryptedConfig,
+        enabled: true,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      res.json({ id: docRef.id });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add SNMP device" });
+    }
+  });
+
+  app.post("/api/agent/snmp-poll-result", verifyAgentJWT, async (req: any, res) => {
+    try {
+      const { snmpDeviceId, values, error } = req.body;
+      const { tenantId } = req.agent;
+      
+      await firestore.collection('snmp_poll_results').add({
+        userId: tenantId,
+        snmpDeviceId,
+        values,
+        error: error || null,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+      
+      // Update device last values
+      if (values) {
+        await firestore.collection('snmp_devices').doc(snmpDeviceId).update({
+          lastValues: values,
+          lastPolledAt: FieldValue.serverTimestamp(),
+          status: 'online'
+        });
+      } else if (error) {
+        await firestore.collection('snmp_devices').doc(snmpDeviceId).update({
+          status: 'offline',
+          lastError: error
+        });
+      }
+      
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to save SNMP result" });
+    }
+  });
+
+  // === Thresholds API ===
+
+  app.get("/api/thresholds/presets", verifyFirebaseToken, (req, res) => {
+    res.json(THRESHOLD_PRESETS);
+  });
+
+  app.get("/api/thresholds/:deviceId", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const snap = await firestore.collection('device_thresholds')
+        .where('userId', '==', req.user.uid)
+        .where('deviceId', '==', req.params.deviceId)
+        .get();
+      res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch thresholds" });
+    }
+  });
+
+  app.post("/api/thresholds", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { deviceId, presetId, name, enabled = true } = req.body;
+      const docRef = await firestore.collection('device_thresholds').add({
+        userId: req.user.uid,
+        deviceId, presetId, name, enabled,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      res.json({ id: docRef.id });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to save threshold" });
     }
   });
 
@@ -636,6 +876,13 @@ async function startServer() {
       const { software } = req.body; // Array of { name, version, catalogId?: string }
       if (!Array.isArray(software)) return res.status(400).json({ error: "software array required" });
 
+      // Atomically sync with catalog
+      const catalogSnap = await firestore.collection('software_catalog').get();
+      const catalogMap = new Map<string, string>();
+      catalogSnap.forEach(doc => {
+        catalogMap.set(doc.data().name.toLowerCase(), doc.id);
+      });
+
       // Replace the device's inventory atomically
       const batch = firestore.batch();
       const existing = await firestore.collection('device_installed_software')
@@ -645,9 +892,10 @@ async function startServer() {
 
       for (const item of software) {
         const ref = firestore.collection('device_installed_software').doc();
+        const catalogId = item.catalogId || catalogMap.get(item.name.toLowerCase()) || null;
         batch.set(ref, {
           userId, deviceId,
-          catalogId: item.catalogId || null,
+          catalogId,
           name: item.name,
           version: item.version || '',
           installedAt: item.installedAt ? new Date(item.installedAt) : FieldValue.serverTimestamp(),
