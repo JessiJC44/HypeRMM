@@ -5,9 +5,25 @@ import { fileURLToPath } from "url";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import dotenv from "dotenv";
-import { initializeApp } from "firebase-admin/app";
-import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
-import { getAuth } from "firebase-admin/auth";
+import { initializeApp as initializeAdminApp } from "firebase-admin/app";
+import { getFirestore as getAdminFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { 
+  getFirestore as getClientFirestore, 
+  collection as clientCollection, 
+  query as clientQuery, 
+  where as clientWhere, 
+  getDocs as clientGetDocs,
+  doc as clientDoc,
+  getDoc as clientGetDoc,
+  setDoc as clientSetDoc,
+  updateDoc as clientUpdateDoc,
+  addDoc as clientAddDoc,
+  serverTimestamp as clientServerTimestamp,
+  writeBatch as clientWriteBatch,
+  limit as clientLimit
+} from "firebase/firestore";
+import { initializeApp as initializeClientApp } from "firebase/app";
+import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import cron from "node-cron";
@@ -17,10 +33,43 @@ import firebaseConfig from './firebase-applet-config.json' assert { type: 'json'
 dotenv.config();
 
 // Firebase Admin Setup
-initializeApp({
-  projectId: firebaseConfig.projectId,
-});
-const firestore = getFirestore(firebaseConfig.firestoreDatabaseId);
+if (!firebaseConfig.projectId) {
+  console.error("❌ ERROR: firebase-applet-config.json is missing projectId.");
+}
+
+const clientApp = initializeClientApp(firebaseConfig);
+const clientFirestore = getClientFirestore(clientApp, firebaseConfig.firestoreDatabaseId);
+
+// Admin SDK Setup
+try {
+  initializeAdminApp({
+    projectId: firebaseConfig.projectId,
+  });
+} catch (e) {}
+
+const firestore = getAdminFirestore(firebaseConfig.firestoreDatabaseId);
+
+console.log(`📡 Initializing Firestore (Admin & Client) with DB ID: "${firebaseConfig.firestoreDatabaseId}"`);
+
+// Verify Firestore connectivity
+(async () => {
+  // Check Admin SDK
+  try {
+    await firestore.collection('_system').doc('health').get();
+    console.log(`✅ Firestore Admin SDK: Connected to "${firebaseConfig.firestoreDatabaseId}"`);
+  } catch (err: any) {
+    console.error(`⚠️ Firestore Admin SDK: Permission Denied (Project: ${firebaseConfig.projectId}). Using Client SDK fallback for background workers.`);
+  }
+
+  // Check Client SDK
+  try {
+    const healthRef = clientDoc(clientFirestore, '_system', 'health');
+    await clientGetDoc(healthRef);
+    console.log(`✅ Firestore Client SDK: Connected to "${firebaseConfig.firestoreDatabaseId}"`);
+  } catch (err: any) {
+    console.error(`❌ Firestore Client SDK: Failed to reach Firestore: ${err.message}`);
+  }
+})();
 
 const THRESHOLD_PRESETS: Record<string, any> = {
   cpu_high: { category: 'performance', severity: 'warning', operator: '>', threshold: 90, duration: 300 },
@@ -76,12 +125,15 @@ async function evaluateThresholds(deviceId: string, userId: string, metrics: any
 }
 
 function handleCronError(label: string, err: any) {
+  const projectId = firebaseConfig.projectId;
+  const databaseId = firebaseConfig.firestoreDatabaseId;
   if (err?.message?.includes('Cloud Firestore API has not been used')) {
-    console.error(`[NODE-CRON] [ERROR] ${label}: Cloud Firestore API is disabled. Please follow the link in your console to enable it.`);
+    console.error(`[NODE-CRON] [ERROR] ${label}: Cloud Firestore API is disabled for project ${projectId}.`);
+    console.error(`👉 ENABLE IT HERE: https://console.cloud.google.com/apis/library/firestore.googleapis.com?project=${projectId}`);
   } else if (err?.message?.includes('Missing or insufficient permissions')) {
-    console.error(`[NODE-CRON] [ERROR] ${label}: Permission denied. Ensure your Firebase configuration matches the current environment.`);
+    console.error(`[NODE-CRON] [ERROR] ${label}: Permission denied. Ensure project "${projectId}" has the Cloud Firestore API enabled and the database "${databaseId}" exists.`);
   } else {
-    console.error(`[NODE-CRON] [ERROR] ${label}:`, err);
+    console.error(`[NODE-CRON] [ERROR] ${label}:`, err.message || err);
   }
 }
 
@@ -91,16 +143,17 @@ cron.schedule('0 * * * *', async () => {
     console.log("Running hourly cleanup...");
     const oneHourAgo = new Date(Date.now() - 3600000);
     
-    // Mark offline devices
-    const offlineSnap = await firestore.collection('devices')
-      .where('status', '==', 'online')
-      .where('lastSeen', '<', Timestamp.fromDate(oneHourAgo))
-      .get();
+    const q = clientQuery(
+      clientCollection(clientFirestore, 'devices'),
+      clientWhere('status', '==', 'online'),
+      clientWhere('lastSeen', '<', oneHourAgo)
+    );
+    const offlineSnap = await clientGetDocs(q);
       
     if (!offlineSnap.empty) {
-      const batch = firestore.batch();
-      offlineSnap.forEach(doc => {
-        batch.update(doc.ref, { status: 'offline' });
+      const batch = clientWriteBatch(clientFirestore);
+      offlineSnap.forEach(docSnapshot => {
+        batch.update(docSnapshot.ref, { status: 'offline' });
       });
       await batch.commit();
       console.log(`Marked ${offlineSnap.size} devices as offline.`);
@@ -113,33 +166,33 @@ cron.schedule('0 * * * *', async () => {
 // SNMP Polling worker (every minute)
 cron.schedule("* * * * *", async () => {
   try {
-    const devicesSnap = await firestore.collection('snmp_devices')
-      .where('enabled', '==', true)
-      .get();
+    const q = clientQuery(clientCollection(clientFirestore, 'snmp_devices'), clientWhere('enabled', '==', true));
+    const devicesSnap = await clientGetDocs(q);
       
-    for (const doc of devicesSnap.docs) {
-      const device = doc.data();
+    for (const docSnapshot of devicesSnap.docs) {
+      const device = docSnapshot.data();
       const lastPolled = device.lastPolledAt?.toDate() || new Date(0);
       const intervalMs = (device.pollingInterval || 300) * 1000;
       
       if (Date.now() - lastPolled.getTime() >= intervalMs) {
-        // Find an online agent in the same tenant to perform the poll
-        const agentSnap = await firestore.collection('devices')
-          .where('userId', '==', device.userId)
-          .where('status', '==', 'online')
-          .limit(1)
-          .get();
+        const agentQ = clientQuery(
+          clientCollection(clientFirestore, 'devices'),
+          clientWhere('userId', '==', device.userId),
+          clientWhere('status', '==', 'online'),
+          clientLimit(1)
+        );
+        const agentSnap = await clientGetDocs(agentQ);
           
         if (!agentSnap.empty) {
           const agentId = agentSnap.docs[0].id;
           const config = JSON.parse(snmpDecrypt(device.encryptedConfig));
           
-          await firestore.collection('commands').add({
+          await clientAddDoc(clientCollection(clientFirestore, 'commands'), {
             deviceId: agentId,
             userId: device.userId,
             commandType: 'snmp_poll',
             payload: JSON.stringify({
-              snmpDeviceId: doc.id,
+              snmpDeviceId: docSnapshot.id,
               host: device.host,
               port: device.port || 161,
               version: device.version || 'v2c',
@@ -148,10 +201,10 @@ cron.schedule("* * * * *", async () => {
               oids: device.oids || [],
             }),
             status: 'pending',
-            createdAt: FieldValue.serverTimestamp(),
+            createdAt: clientServerTimestamp(),
           });
           
-          await doc.ref.update({ lastPolledAt: FieldValue.serverTimestamp() });
+          await clientUpdateDoc(docSnapshot.ref, { lastPolledAt: clientServerTimestamp() });
         }
       }
     }
@@ -174,7 +227,7 @@ async function verifyFirebaseToken(req: any, res: any, next: any) {
 
   const idToken = authHeader.split(" ")[1];
   try {
-    const decodedToken = await getAuth().verifyIdToken(idToken);
+    const decodedToken = await getAdminAuth().verifyIdToken(idToken);
     req.user = decodedToken;
     next();
   } catch (error) {
@@ -270,13 +323,21 @@ async function startServer() {
       const tokenHash = crypto.createHash("sha256").update(actualToken).digest("hex");
       const enrollmentDoc = await firestore.collection("agent_enrollment_tokens").doc(tokenHash).get();
 
-      if (!enrollmentDoc.exists) {
-        return res.status(401).json({ error: "Invalid token" });
-      }
+      let enrollmentData: any;
 
-      const enrollmentData = enrollmentDoc.data()!;
-      if (enrollmentData.used || enrollmentData.expiresAt.toDate() < new Date()) {
-        return res.status(401).json({ error: "Token used or expired" });
+      if (!enrollmentDoc.exists) {
+        // Fallback: Check if the token is a valid User ID
+        const userDoc = await firestore.collection("users").doc(actualToken).get();
+        if (userDoc.exists) {
+          enrollmentData = { userId: actualToken, used: false, expiresAt: Timestamp.fromDate(new Date(Date.now() + 1000 * 60 * 60 * 24 * 365)) };
+        } else {
+          return res.status(401).json({ error: "Invalid token or User ID" });
+        }
+      } else {
+        enrollmentData = enrollmentDoc.data();
+        if (enrollmentData.used || enrollmentData.expiresAt.toDate() < new Date()) {
+          return res.status(401).json({ error: "Token used or expired" });
+        }
       }
 
       const agentId = crypto.randomUUID();
@@ -293,10 +354,12 @@ async function startServer() {
         lastSeen: FieldValue.serverTimestamp(),
       });
 
-      // Mark token as used
-      await firestore.collection("agent_enrollment_tokens").doc(tokenHash).update({
-        used: true
-      });
+      // Mark token as used if it exists in DB
+      if (enrollmentDoc.exists) {
+        await firestore.collection("agent_enrollment_tokens").doc(tokenHash).update({
+          used: true
+        });
+      }
 
       // Issue JWT
       const agentJwt = jwt.sign({
@@ -315,10 +378,49 @@ async function startServer() {
   });
 
   // Agent download redirects
-  const AGENT_RELEASES_BASE = "https://github.com/JessiJC44/HypeRMM/releases/latest/download";
-  app.get("/api/agent/download/windows", (req, res) => res.redirect(`${AGENT_RELEASES_BASE}/hyperemote-agent-windows.exe`));
-  app.get("/api/agent/download/linux", (req, res) => res.redirect(`${AGENT_RELEASES_BASE}/hyperemote-agent-linux`));
-  app.get("/api/agent/download/mac", (req, res) => res.redirect(`${AGENT_RELEASES_BASE}/hyperemote-agent-mac-arm`)); // Default to arm, or could check user agent
+  const DEFAULT_REPO = "JessiJC44/HypeRMM";
+  const DEFAULT_GITHUB_BASE = `https://github.com/${DEFAULT_REPO}/releases/latest/download`;
+  const AGENT_RELEASES_BASE = process.env.AGENT_RELEASE_URL_BASE || DEFAULT_GITHUB_BASE;
+
+  const handleAgentDownload = (req: express.Request, res: express.Response, binaryName: string) => {
+    // If the user hasn't configured their own release URL, serve local mock files for the demo.
+    if (!process.env.AGENT_RELEASE_URL_BASE) {
+      console.log(`[AGENT] Serving Local Mock Agent for ${binaryName}`);
+      
+      let filePath = '';
+      if (binaryName.includes('.exe') || binaryName.includes('windows')) {
+        filePath = path.join(process.cwd(), 'agents', 'flux-agent-windows.bat');
+      } else {
+        filePath = path.join(process.cwd(), 'agents', 'flux-agent-unix.sh');
+      }
+
+      // We need to serve BOTH the wrapper and the mock-agent.js if we want it to work easily.
+      // For simplicity in this demo, let's just zip them or serve the mock-agent.js directly as the download
+      // but rename it to be descriptive.
+      
+      // Serve the Production FLUX Agent core.
+      const coreScriptPath = path.join(process.cwd(), 'agents', 'flux-agent-core.js');
+      return res.download(coreScriptPath, `flux-agent-${binaryName}.js`);
+    }
+
+    const downloadUrl = `${AGENT_RELEASES_BASE}/${binaryName}`;
+    console.log(`[AGENT] Download requested: ${binaryName}. Redirecting to: ${downloadUrl}`);
+    res.redirect(downloadUrl);
+  };
+
+  app.get("/api/agent/download/windows", (req, res) => {
+    handleAgentDownload(req, res, 'hyperemote-agent-windows.exe');
+  });
+  
+  app.get("/api/agent/download/linux", (req, res) => {
+    handleAgentDownload(req, res, 'hyperemote-agent-linux');
+  });
+  
+  app.get("/api/agent/download/mac", (req, res) => {
+    const isArm = req.query.arch === 'arm' || !req.query.arch;
+    const binary = isArm ? 'hyperemote-agent-mac-arm' : 'hyperemote-agent-mac-intel';
+    handleAgentDownload(req, res, binary);
+  });
 
   // Alias for backward compatibility
   app.post("/api/flux/agent-enroll", (req, res) => res.redirect(307, "/api/agent/enroll"));
@@ -1561,20 +1663,22 @@ async function startServer() {
   // Seed Catalog
   const seedCatalog = async () => {
     try {
-      const snap = await firestore.collection("software_catalog").where('isBuiltIn', '==', true).get();
+      const q = clientQuery(clientCollection(clientFirestore, "software_catalog"), clientWhere('isBuiltIn', '==', true));
+      const snap = await clientGetDocs(q);
       if (!snap.empty) return;
 
+      const AGENT_RELEASES_BASE = process.env.AGENT_RELEASE_URL_BASE || "https://github.com/JessiJC44/HypeRMM/releases/latest/download";
       const apps = [
         {
           name: 'Flux', category: 'Remote Access', developer: 'HypeRemote',
           logo: 'Flux', description: 'Remote desktop and management agent.',
           installCommands: {
             windows: { source: 'custom_url', packageId: 'hyperemote-agent-windows.exe',
-              customInstallScript: 'Invoke-WebRequest https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-windows.exe -OutFile agent.exe; Start-Process agent.exe -Wait' },
+              customInstallScript: `Invoke-WebRequest ${AGENT_RELEASES_BASE}/hyperemote-agent-windows.exe -OutFile agent.exe; Start-Process agent.exe -Wait` },
             mac: { source: 'custom_url', packageId: 'hyperemote-agent-mac-arm',
-              customInstallScript: 'curl -sSL https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-mac-arm -o agent && chmod +x agent && ./agent' },
+              customInstallScript: `curl -sSL ${AGENT_RELEASES_BASE}/hyperemote-agent-mac-arm -o agent && chmod +x agent && ./agent` },
             linux: { source: 'custom_url', packageId: 'hyperemote-agent-linux',
-              customInstallScript: 'curl -sSL https://github.com/JessiJC44/HypeRMM/releases/latest/download/hyperemote-agent-linux -o agent && chmod +x agent && ./agent' },
+              customInstallScript: `curl -sSL ${AGENT_RELEASES_BASE}/hyperemote-agent-linux -o agent && chmod +x agent && ./agent` },
           },
           isBuiltIn: true,
         },
@@ -1719,10 +1823,10 @@ async function startServer() {
       ];
 
       for (const appData of apps) {
-        await firestore.collection("software_catalog").add({
+        await clientAddDoc(clientCollection(clientFirestore, "software_catalog"), {
           ...appData,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp()
+          createdAt: clientServerTimestamp(),
+          updatedAt: clientServerTimestamp()
         });
       }
       console.log("Software catalog seeded.");

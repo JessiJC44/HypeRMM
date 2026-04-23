@@ -28,7 +28,8 @@ import {
   MessageSquare,
   Bell,
   Building2,
-  RefreshCw
+  RefreshCw,
+  Zap
 } from 'lucide-react';
 import { 
   Table, 
@@ -96,6 +97,7 @@ export function Devices() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
   const [selectedDevice, setSelectedDevice] = React.useState<Device | null>(null);
+  const [autoStartFlux, setAutoStartFlux] = React.useState(false);
   const [installStep, setInstallStep] = React.useState(1);
   const [installMode, setInstallMode] = React.useState<'download' | 'command' | 'link'>('download');
   const [enrollmentToken, setEnrollmentToken] = React.useState('');
@@ -167,7 +169,16 @@ export function Devices() {
   };
 
   if (selectedDevice) {
-    return <AgentConsole device={selectedDevice} onBack={() => setSelectedDevice(null)} />;
+    return (
+      <AgentConsole 
+        device={selectedDevice} 
+        onBack={() => {
+          setSelectedDevice(null);
+          setAutoStartFlux(false);
+        }} 
+        autoStartFlux={autoStartFlux}
+      />
+    );
   }
 
   return (
@@ -406,16 +417,26 @@ export function Devices() {
                               <Button 
                                 variant="outline" 
                                 size="sm" 
-                                className="h-8 px-3 gap-2 text-[10px] font-bold text-slate-400 bg-slate-50 cursor-not-allowed"
-                                disabled
+                                className={cn(
+                                  "h-8 px-3 gap-2 text-[10px] font-bold transition-all",
+                                  device.status === 'online' 
+                                    ? "text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100" 
+                                    : "text-slate-400 bg-slate-50 cursor-not-allowed"
+                                )}
+                                disabled={device.status !== 'online'}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setAutoStartFlux(true);
+                                  setSelectedDevice(device);
+                                }}
                               >
-                                <Monitor size={14} />
-                                {t('agent.remote_coming_soon')}
+                                <Zap size={14} className={device.status === 'online' ? "text-blue-500" : ""} />
+                                {device.status === 'online' ? 'Connect via FLUX' : t('agent.remote_active')}
                               </Button>
                             </span>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>{t('agent.remote_coming_soon_tooltip')}</p>
+                            <p>{t('agent.remote_tooltip')}</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -640,10 +661,10 @@ export function Devices() {
                       </div>
                       <Button 
                         onClick={() => {
-                          const baseUrl = 'https://github.com/JessiJC44/HypeRMM/releases/latest/download';
-                          const url = newDevice.os === 'Windows' ? `${baseUrl}/hyperemote-agent-windows.exe` : 
-                                      newDevice.os === 'macOS' ? `${baseUrl}/hyperemote-agent-mac-${newDevice.arch === 'M series (ARM)' ? 'arm' : 'intel'}` :
-                                      `${baseUrl}/hyperemote-agent-linux`;
+                          const localApiBase = window.location.origin + '/api/agent/download';
+                          const url = newDevice.os === 'Windows' ? `${localApiBase}/windows` : 
+                                      newDevice.os === 'macOS' ? `${localApiBase}/mac?arch=${newDevice.arch === 'M series (ARM)' ? 'arm' : 'intel'}` :
+                                      `${localApiBase}/linux`;
                           window.open(url, '_blank');
                           handleAddAgent(null as any);
                         }}

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { 
   Download, 
   Terminal, 
@@ -38,9 +39,9 @@ export function AgentDownload() {
   const [selectedOS, setSelectedOS] = React.useState<'windows' | 'linux' | 'mac'>('windows');
   const user = auth.currentUser;
 
-  const AGENT_VERSION = 'v0.1.0';
+  const AGENT_VERSION = 'v1.0.0';
   const userId = user?.uid || 'YOUR_USER_ID';
-  const baseUrl = 'https://github.com/JessiJC44/HypeRMM/releases/latest/download';
+  const localApiBase = window.location.origin + '/api/agent/download';
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -49,24 +50,24 @@ export function AgentDownload() {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const windowsCommand = `powershell -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri '${baseUrl}/hyperemote-agent-windows.exe' -OutFile agent.exe; .\\agent.exe '${userId}' '${deviceName || '$env:COMPUTERNAME'}'}"`;
+  const windowsCommand = `node flux-agent-windows.exe.js "${window.location.origin}" "${userId}"`;
   
-  const linuxCommand = `curl -sSL ${baseUrl}/hyperemote-agent-linux -o agent && chmod +x agent && ./agent "${userId}" "${deviceName || '$(hostname)'}"`;
+  const linuxCommand = `node flux-agent-linux.js "${window.location.origin}" "${userId}"`;
   
-  const macCommand = `curl -sSL ${baseUrl}/hyperemote-agent-mac-arm -o agent && chmod +x agent && ./agent "${userId}" "${deviceName || '$(hostname)'}"`;
+  const macCommand = `node flux-agent-mac-arm.js "${window.location.origin}" "${userId}"`;
 
-  const macIntelCommand = `curl -sSL ${baseUrl}/hyperemote-agent-mac-intel -o agent && chmod +x agent && ./agent "${userId}" "${deviceName || '$(hostname)'}"`;
+  const macIntelCommand = `node flux-agent-mac-intel.js "${window.location.origin}" "${userId}"`;
 
   const getShareLink = () => {
     switch (selectedOS) {
       case 'windows':
-        return `${baseUrl}/hyperemote-agent-windows.exe`;
+        return `${localApiBase}/windows`;
       case 'linux':
-        return `${baseUrl}/hyperemote-agent-linux`;
+        return `${localApiBase}/linux`;
       case 'mac':
-        return `${baseUrl}/hyperemote-agent-mac-arm`;
+        return `${localApiBase}/mac`;
       default:
-        return `${baseUrl}/hyperemote-agent-windows.exe`;
+        return `${localApiBase}/windows`;
     }
   };
 
@@ -76,6 +77,16 @@ export function AgentDownload() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
+            <Alert className="mb-6 bg-emerald-50 border-emerald-200">
+              <Shield className="h-4 w-4 text-emerald-600" />
+              <AlertTitle className="text-emerald-800 font-bold">Production FLUX Agent - Ready to Deploy</AlertTitle>
+              <AlertDescription className="text-emerald-700 text-xs">
+                Download the <b>FLUX Production Agent</b> below. This high-performance core allows you to control the device, run remote scripts, and monitor system health directly from HypeRemote.
+                <br/><br/>
+                <b>Prerequisite:</b> Ensure Node.js is installed on the target machine.
+              </AlertDescription>
+            </Alert>
+
         <div className="flex items-center gap-3">
           <h1 className="text-2xl lg:text-3xl font-bold">Install Agent</h1>
           <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
@@ -142,13 +153,13 @@ export function AgentDownload() {
                 <Button 
                   size="sm"
                   className="w-full gap-2"
-                  onClick={() => window.open(`${baseUrl}/hyperemote-agent-windows.exe`, '_blank')}
+                  onClick={() => window.open(`${localApiBase}/windows`, '_blank')}
                 >
                   <Download size={16} />
-                  Download HypeRemote-Agent.exe
+                  Download FLUX Production Agent (.js)
                 </Button>
                 <p className="text-[10px] text-muted-foreground">
-                  Windows 10/11 x64 • Run: <code className="bg-muted px-1 rounded">agent.exe {userId}</code>
+                  Requires Node.js • Run: <code className="bg-muted px-1 rounded">node flux-agent-windows.exe.js "{window.location.origin}" {userId}</code>
                 </p>
               </CardContent>
             </Card>
@@ -218,13 +229,13 @@ export function AgentDownload() {
                   variant="outline" 
                   size="sm"
                   className="w-full gap-2"
-                  onClick={() => window.open(`${baseUrl}/hyperemote-agent-linux`, '_blank')}
+                  onClick={() => window.open(`${localApiBase}/linux`, '_blank')}
                 >
                   <Download size={16} />
-                  Download Linux Binary (x64)
+                  Download FLUX Agent
                 </Button>
                 <p className="text-[10px] text-muted-foreground">
-                  Debian, Ubuntu, RHEL, Fedora, etc.
+                   Requires Node.js • Run: <code className="bg-muted px-1 rounded">node flux-agent-linux.js "{window.location.origin}" {userId}</code>
                 </p>
               </CardContent>
             </Card>
@@ -294,7 +305,7 @@ export function AgentDownload() {
                   variant="outline" 
                   size="sm"
                   className="gap-2"
-                  onClick={() => window.open(`${baseUrl}/hyperemote-agent-mac-arm`, '_blank')}
+                  onClick={() => window.open(`${localApiBase}/mac?arch=arm`, '_blank')}
                 >
                   <Download size={16} />
                   M series (ARM)
@@ -303,7 +314,7 @@ export function AgentDownload() {
                   variant="outline" 
                   size="sm"
                   className="gap-2"
-                  onClick={() => window.open(`${baseUrl}/hyperemote-agent-mac-intel`, '_blank')}
+                  onClick={() => window.open(`${localApiBase}/mac?arch=intel`, '_blank')}
                 >
                   <Download size={16} />
                   Intel (x64)

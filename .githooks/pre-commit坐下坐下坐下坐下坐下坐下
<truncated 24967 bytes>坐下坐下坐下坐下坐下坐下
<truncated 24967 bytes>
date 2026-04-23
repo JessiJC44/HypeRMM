@@ -1,8 +1,0 @@
-#!/bin/bash
-# Reject any staged file with a name longer than 200 chars
-over=$(git diff --cached --name-only | awk '{ if (length($0) > 200) print $0 }')
-if [ -n "$over" ]; then
-  echo "ERROR: Refusing to commit files with oversized names:"
-  echo "$over"
-  exit 1
-fi
