@@ -378,33 +378,12 @@ async function startServer() {
   });
 
   // Agent download redirects
-  const DEFAULT_REPO = "JessiJC44/HypeRMM";
-  const DEFAULT_GITHUB_BASE = `https://github.com/${DEFAULT_REPO}/releases/latest/download`;
-  const AGENT_RELEASES_BASE = process.env.AGENT_RELEASE_URL_BASE || DEFAULT_GITHUB_BASE;
+  const AGENT_RELEASES_BASE = process.env.AGENT_RELEASE_URL_BASE || "https://github.com/JessiJC44/HypeRMM/releases/latest/download";
 
   const handleAgentDownload = (req: express.Request, res: express.Response, binaryName: string) => {
-    // If the user hasn't configured their own release URL, serve local mock files for the demo.
-    if (!process.env.AGENT_RELEASE_URL_BASE) {
-      console.log(`[AGENT] Serving Local Mock Agent for ${binaryName}`);
-      
-      let filePath = '';
-      if (binaryName.includes('.exe') || binaryName.includes('windows')) {
-        filePath = path.join(process.cwd(), 'agents', 'flux-agent-windows.bat');
-      } else {
-        filePath = path.join(process.cwd(), 'agents', 'flux-agent-unix.sh');
-      }
-
-      // We need to serve BOTH the wrapper and the mock-agent.js if we want it to work easily.
-      // For simplicity in this demo, let's just zip them or serve the mock-agent.js directly as the download
-      // but rename it to be descriptive.
-      
-      // Serve the Production FLUX Agent core.
-      const coreScriptPath = path.join(process.cwd(), 'agents', 'flux-agent-core.js');
-      return res.download(coreScriptPath, `flux-agent-${binaryName}.js`);
-    }
-
+    // FORCE PRODUCTION REDIRECTS - The Go binaries are hosted in the GitHub releases
     const downloadUrl = `${AGENT_RELEASES_BASE}/${binaryName}`;
-    console.log(`[AGENT] Download requested: ${binaryName}. Redirecting to: ${downloadUrl}`);
+    console.log(`[AGENT] Redirecting to Production Binary: ${downloadUrl}`);
     res.redirect(downloadUrl);
   };
 

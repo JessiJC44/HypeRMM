@@ -1,11 +1,20 @@
-import { initializeApp } from 'firebase-admin/app';
+import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const saPath = path.join(__dirname, 'service-account.json');
+if (!fs.existsSync(saPath)) {
+  console.error('Missing scripts/service-account.json — download from Firebase Console → Service Accounts');
+  process.exit(1);
+}
 
 initializeApp({
-  projectId: 'gen-lang-client-0272660678'
+  credential: cert(JSON.parse(fs.readFileSync(saPath, 'utf8'))),
 });
+
 const db = getFirestore();
-db.settings({ databaseId: 'ai-studio-b788ec34-cbce-4714-9164-f0c927c408a2' });
+// db.settings({ databaseId: 'ai-studio-b788ec34-cbce-4714-9164-f0c927c408a2' }); // Set globally via service account if needed
 
 const CATALOG = [
   {

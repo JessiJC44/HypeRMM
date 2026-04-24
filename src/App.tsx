@@ -67,7 +67,7 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = React.useState(false);
   const [needsEmailVerification, setNeedsEmailVerification] = React.useState(false);
   
-  type AuthStep = 'idle' | 'signing-in' | 'primary-auth-complete' | 'mfa-required' | 'mfa-setup' | 'authenticated';
+  type AuthStep = 'idle' | 'signing-in' | 'primary-auth-complete' | 'loading-mfa-status' | 'mfa-required' | 'mfa-setup' | 'authenticated';
   const [authStep, setAuthStep] = React.useState<AuthStep>('idle');
 
   const { language, setLanguage, t } = useLanguage();
@@ -114,7 +114,7 @@ export default function App() {
           const method = provider === 'google.com' ? 'google' : 'email';
           setAuthMethod(method);
           
-          setAuthStep('primary-auth-complete');
+          setAuthStep('loading-mfa-status');
 
           // Check if user document exists, create it if not
           const userRef = doc(db, 'users', firebaseUser.uid);
@@ -212,7 +212,7 @@ export default function App() {
 
   // Step 2: Primary Auth Complete (Checking requirements)
   // This state is transient but we show a loader
-  if (authStep === 'primary-auth-complete') {
+  if (authStep === 'primary-auth-complete' || authStep === 'loading-mfa-status') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <RefreshCw className="animate-spin text-primary" size={32} />

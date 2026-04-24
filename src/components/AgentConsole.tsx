@@ -71,7 +71,6 @@ const AppleIcon = ({ size = 16, className = "" }: { size?: number; className?: s
   </svg>
 );
 
-import { fluxService } from '../services/fluxService';
 import { 
   Tooltip, 
   TooltipContent, 
@@ -89,39 +88,10 @@ export function AgentConsole({ device, onBack, autoStartFlux }: AgentConsoleProp
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = React.useState('overview');
   const [isToolOpen, setIsToolOpen] = React.useState<string | null>(null);
-  const [isConnecting, setIsConnecting] = React.useState(false);
-  const [isFluxActive, setIsFluxActive] = React.useState(false);
   const [commands, setCommands] = React.useState<Command[]>([]);
   const [logs, setLogs] = React.useState<DeviceLog[]>([]);
   const [selectedCommand, setSelectedCommand] = React.useState<Command | null>(null);
   const [performanceData, setPerformanceData] = React.useState<Array<{ time: string; cpu: number; ram: number }>>([]);
-
-  const startFluxSession = async () => {
-    setIsConnecting(true);
-    try {
-      await fluxService.init();
-      const sessionId = await fluxService.connectToDevice(device.id, device.name);
-      
-      console.log('Connected to FLUX session:', sessionId);
-      setIsFluxActive(true);
-      toast.success('FLUX Unattended Connection Established');
-    } catch (err) {
-      console.error('Flux connection error:', err);
-      toast.error('Failed to establish FLUX remote session. Ensure agent is configured for unattended access.');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const stopFluxSession = async () => {
-    try {
-      await fluxService.stopSession();
-      setIsFluxActive(false);
-      toast.info('FLUX session ended.');
-    } catch (err) {
-      setIsFluxActive(false);
-    }
-  };
 
   React.useEffect(() => {
     const user = auth.currentUser;
@@ -165,12 +135,6 @@ export function AgentConsole({ device, onBack, autoStartFlux }: AgentConsoleProp
       unsubLogs();
     };
   }, [device.id]);
-
-  React.useEffect(() => {
-    if (autoStartFlux && device.status === 'online') {
-      startFluxSession();
-    }
-  }, [autoStartFlux, device.id]);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Monitor },
@@ -222,24 +186,24 @@ export function AgentConsole({ device, onBack, autoStartFlux }: AgentConsoleProp
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span>
+                <div className="inline-block">
                   <Button 
-                    onClick={isFluxActive ? stopFluxSession : startFluxSession}
-                    loading={isConnecting}
-                    className={cn(
-                      "rounded-full h-9 px-6 font-bold gap-2 transition-all",
-                      isFluxActive 
-                        ? "bg-rose-500 hover:bg-rose-600 text-white" 
-                        : "bg-blue-600 hover:bg-blue-700 text-white"
-                    )}
+                    disabled 
+                    className="gap-2 opacity-60 cursor-not-allowed rounded-full h-9 px-6 font-bold"
+                    variant="outline"
                   >
-                    <Zap size={16} className={isFluxActive ? "animate-pulse" : ""} />
-                    {isFluxActive ? 'End FLUX Session' : 'Connect via FLUX'}
+                    <Monitor size={16} />
+                    Remote Control
+                    <span className="ml-2 text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600">
+                      Coming Soon
+                    </span>
                   </Button>
-                </span>
+                </div>
               </TooltipTrigger>
-              <TooltipContent>
-                <p>{t('agent.remote_tooltip')}</p>
+              <TooltipContent className="max-w-xs">
+                <p className="text-xs">
+                  Flux remote control will be available when the self-hosted remote desktop infrastructure is deployed. Full-screen unattended access to Windows, Mac, and Linux devices.
+                </p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -247,104 +211,6 @@ export function AgentConsole({ device, onBack, autoStartFlux }: AgentConsoleProp
       </div>
 
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Flux Remote Session Overlay */}
-        <AnimatePresence>
-          {isFluxActive && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              className="absolute inset-0 z-[60] bg-slate-950 flex flex-col"
-            >
-              <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="px-3 py-1 bg-brand-blue rounded-md text-[10px] font-bold text-white uppercase tracking-widest">
-                    FLUX UNATTENDED ACCESS
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-white leading-none">Remote Desktop: {device.name}</span>
-                    <span className="text-[10px] text-slate-500 font-medium mt-1 uppercase tracking-tight">Secured via FLUX Core Protocol</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-emerald-500 border-emerald-500/20 bg-emerald-500/5 text-[10px] font-bold">
-                    CONNECTED DIRECTLY
-                  </Badge>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={stopFluxSession}
-                    className="text-slate-400 hover:text-white hover:bg-slate-800 h-8 font-bold text-xs"
-                  >
-                    Disconnect
-                  </Button>
-                </div>
-              </div>
-              
-              <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden bg-[#0a0a0a]">
-                {/* Cobrowse Viewer Container */}
-                <div id="flux-viewer-container" className="absolute inset-0 w-full h-full"></div>
-
-                <div className="text-center space-y-6 z-10" id="flux-placeholder">
-                  <div className="relative">
-                    <motion.div 
-                      animate={{ scale: [1, 1.1, 1] }}
-                      transition={{ duration: 4, repeat: Infinity }}
-                      className="w-24 h-24 bg-brand-blue/10 rounded-full flex items-center justify-center border border-brand-blue/20 mx-auto"
-                    >
-                      <Zap size={48} className="text-brand-blue" />
-                    </motion.div>
-                    <div className="absolute -top-2 -right-2">
-                       <span className="flex h-3 w-3">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-xl font-bold text-white">FLUX Unattended Control Session</h3>
-                    <p className="text-sm text-slate-400 max-w-sm mx-auto mt-2 font-medium">
-                      Establishing direct handshake with {device.name}. <br/>
-                      No consent required for this verified corporate asset.
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-center justify-center gap-3 pt-4">
-                    <Button variant="outline" className="bg-slate-900 border-slate-800 text-slate-300 font-bold hover:bg-slate-800 rounded-xl">
-                      View full screen
-                    </Button>
-                    <Button variant="outline" className="bg-slate-900 border-slate-800 text-slate-300 font-bold hover:bg-slate-800 rounded-xl">
-                      Toggle Admin View
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Technical Floating UI */}
-                <div className="absolute top-8 left-8 p-4 bg-slate-900/80 backdrop-blur-md border border-slate-700 rounded-2xl space-y-3 pointer-events-none">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-500">
-                      <Settings size={16} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-white uppercase tracking-widest">Handshake</p>
-                      <p className="text-[10px] text-slate-400 font-medium">Verified Agent JWT</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-500">
-                      <Lock size={16} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-white uppercase tracking-widest">Security</p>
-                      <p className="text-[10px] text-slate-400 font-medium">E2EE Flux Tunnel</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
         {/* Sidebar Tabs */}
         <div className="w-64 bg-white border-r flex flex-col p-4 gap-1">
           {tabs.map((tab) => (
