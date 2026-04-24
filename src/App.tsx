@@ -117,14 +117,22 @@ export default function App() {
           const method = provider === 'google.com' ? 'google' : 'email';
           setAuthMethod(method);
           
+          // Reset MFA-related state at start of every sign-in to prevent stale UI from previous sessions
+          setMfaSetupMethod(null);
+          setShow2FAMethod(null);
+          
           setAuthStep('loading-mfa-status');
 
-          // Check if user document exists, create it if not
+          // Fetch user doc AND check for passkeys in parallel for speed
           const userRef = doc(db, 'users', firebaseUser.uid);
-          const userDoc = await getDoc(userRef);
-          let userData = userDoc.data();
+          const [userDocResult, userHasPasskey] = await Promise.all([
+            getDoc(userRef),
+            passkeyService.hasPasskey(firebaseUser.uid),
+          ]);
+          
+          let userData = userDocResult.data();
 
-          if (!userDoc.exists()) {
+          if (!userDocResult.exists()) {
             userData = {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
@@ -136,8 +144,8 @@ export default function App() {
             };
             await setDoc(userRef, userData);
           } else {
-            // Update last login
-            await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
+            // Update last login (non-blocking)
+            setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true }).catch(console.error);
           }
           
           // Handle Email verification if needed
@@ -152,28 +160,35 @@ export default function App() {
           const mfaEnabled = userData?.mfaEnabled || totpEnabled || passkeyEnabled;
           
           setUserTotpEnabled(totpEnabled);
-
-          // Check for passkeys
-          const userHasPasskey = await passkeyService.hasPasskey(firebaseUser.uid);
           setHasPasskey(userHasPasskey);
+
+          // Compute the final step BEFORE dispatching any state so both updates are committed atomically
+          let nextStep: AuthStep;
+          let nextShow2FA: 'passkey' | 'totp' | null = null;
+          let nextSetupMethod: 'choice' | 'passkey' | 'totp' | null = null;
 
           if (mfaEnabled || userHasPasskey) {
             if (!isMfaVerified) {
-              setAuthStep('mfa-required');
-              // Use a priority for passkeys if supported
+              nextStep = 'mfa-required';
               const isPasskeyPossible = (passkeyEnabled || userHasPasskey);
-              setShow2FAMethod(isPasskeyPossible ? 'passkey' : 'totp');
+              nextShow2FA = isPasskeyPossible ? 'passkey' : 'totp';
             } else {
-              setAuthStep('authenticated');
+              nextStep = 'authenticated';
             }
           } else {
             if (!isMfaVerified) {
-              setAuthStep('mfa-setup');
-              setMfaSetupMethod('choice');
+              nextStep = 'mfa-setup';
+              nextSetupMethod = 'choice';
             } else {
-              setAuthStep('authenticated');
+              nextStep = 'authenticated';
             }
           }
+
+          // Use React 18 automatic batching — all setState calls inside this block are committed in one render
+          setUser(firebaseUser);
+          setShow2FAMethod(nextShow2FA);
+          setMfaSetupMethod(nextSetupMethod);
+          setAuthStep(nextStep);
         } else {
           setUser(null);
           setAuthMethod(null);
@@ -222,7 +237,8 @@ export default function App() {
   }
 
   // Step 3: MFA Setup (New Users)
-  if (authStep === 'mfa-setup' && !isMfaVerified) {
+  // Extra guard: require mfaSetupMethod to be set — prevents rendering during transient states
+  if (authStep === 'mfa-setup' && !isMfaVerified && mfaSetupMethod !== null) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center">
         {mfaSetupMethod === 'choice' && (
@@ -260,7 +276,8 @@ export default function App() {
   }
 
   // Step 4: MFA Verification (Returning Users)
-  if (authStep === 'mfa-required' && !isMfaVerified) {
+  // Extra guard: require show2FAMethod to be set — prevents rendering during transient states
+  if (authStep === 'mfa-required' && !isMfaVerified && show2FAMethod !== null) {
     return (
       <div className="min-h-screen bg-background">
         {show2FAMethod === 'passkey' ? (
@@ -301,6 +318,16 @@ export default function App() {
   if (needsEmailVerification && user && (authStep === 'authenticated' || !isMfaVerified)) {
     return (
       <EmailVerificationScreen user={user} onVerified={() => setNeedsEmailVerification(false)} />
+    );
+  }
+
+  // Catch-all: if we have a user but no matching render branch, show the spinner
+  // instead of falling through to the authenticated UI (which would be wrong if MFA not done)
+  if (user && !isMfaVerified && authStep !== 'authenticated') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <RefreshCw className="animate-spin text-primary" size={32} />
+      </div>
     );
   }
 
