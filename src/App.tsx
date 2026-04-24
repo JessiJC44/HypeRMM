@@ -109,6 +109,9 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
+          // Immediately set user to avoid flash of login page
+          setUser(firebaseUser);
+          
           // Determine auth method
           const provider = firebaseUser.providerData[0]?.providerId;
           const method = provider === 'google.com' ? 'google' : 'email';
@@ -171,8 +174,6 @@ export default function App() {
               setAuthStep('authenticated');
             }
           }
-          
-          setUser(firebaseUser);
         } else {
           setUser(null);
           setAuthMethod(null);
@@ -203,20 +204,20 @@ export default function App() {
 
   // Linear Auth State Machine
   
-  // Step 1: Login / Sign-in required
-  if (!user || authStep === 'idle' || authStep === 'signing-in') {
-    return (
-      <AnimatedCharactersLoginPage onLogin={() => setAuthStep('signing-in')} />
-    );
-  }
-
-  // Step 2: Primary Auth Complete (Checking requirements)
-  // This state is transient but we show a loader
+  // Step 1: Loading State (Checking MFA status)
+  // We check this BEFORE the login page because if we are loading status, we want to show a spinner
   if (authStep === 'primary-auth-complete' || authStep === 'loading-mfa-status') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <RefreshCw className="animate-spin text-primary" size={32} />
       </div>
+    );
+  }
+  
+  // Step 2: Login / Sign-in required
+  if (!user || authStep === 'idle' || authStep === 'signing-in') {
+    return (
+      <AnimatedCharactersLoginPage onLogin={() => setAuthStep('signing-in')} />
     );
   }
 
