@@ -17,6 +17,8 @@ import { Admin } from './components/Admin';
 import { AICenter } from './components/AICenter';
 import { AgentDownload } from './components/AgentDownload';
 import { Scripts } from './components/Scripts';
+import { ThresholdProfiles } from './components/ThresholdProfiles';
+import { AutomationProfiles } from './components/AutomationProfiles';
 import { TOTPSetup } from './components/TOTPSetup';
 import { TOTPVerify } from './components/TOTPVerify';
 import { MFAChoice } from './components/MFAChoice';
@@ -361,6 +363,10 @@ export default function App() {
         return <Admin />;
       case 'scripts':
         return <Scripts />;
+      case 'thresholds':
+        return <ThresholdProfiles />;
+      case 'automation':
+        return <AutomationProfiles />;
       case 'patches':
         return <PatchManagement />;
       case 'software':

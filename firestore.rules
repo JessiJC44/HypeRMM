@@ -42,6 +42,10 @@ service cloud.firestore {
     // Collection Rules
     // ===============================================================
 
+    match /_system/health {
+      allow read, write: if true;
+    }
+
     match /_test/{document} {
       allow read, write: if true;
     }
@@ -110,10 +114,9 @@ service cloud.firestore {
     }
 
     // SNMP
-    match /snmp_templates/{id} {
+    match /snmp_templates/{templateId} {
       allow read: if isDocOwner() || isAdmin();
-      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
-      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+      allow create, update, delete: if false;
     }
 
     match /snmp_devices/{id} {
@@ -148,14 +151,13 @@ service cloud.firestore {
     }
 
     // Automation
-    match /automation_profiles/{id} {
+    match /automation_profiles/{profileId} {
       allow read: if isDocOwner() || isAdmin();
-      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
-      allow update, delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+      allow create, update, delete: if false;
     }
-    match /automation_executions/{id} {
+    match /automation_executions/{executionId} {
       allow read: if isDocOwner() || isAdmin();
-      allow write: if false;
+      allow create, update, delete: if false;
     }
     match /software_bundles/{id} {
       allow read: if isDocOwner() || isAdmin();

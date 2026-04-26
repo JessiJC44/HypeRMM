@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import dotenv from "dotenv";
-import { initializeApp as initializeAdminApp } from "firebase-admin/app";
+import { initializeApp as initializeAdminApp, getApps as getAdminApps } from "firebase-admin/app";
 import { getFirestore as getAdminFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { 
   getFirestore as getClientFirestore, 
@@ -27,6 +27,7 @@ import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import cron from "node-cron";
+import { AGENT_RELEASES_BASE } from './server/config';
 import { encrypt as snmpEncrypt, decrypt as snmpDecrypt } from './src/lib/snmpCrypto.ts';
 import firebaseConfig from './firebase-applet-config.json' assert { type: 'json' };
 
@@ -42,26 +43,39 @@ const clientFirestore = getClientFirestore(clientApp, firebaseConfig.firestoreDa
 
 // Admin SDK Setup
 try {
-  initializeAdminApp({
-    projectId: firebaseConfig.projectId,
-  });
-} catch (e) {}
+  if (getAdminApps().length === 0) {
+    // initializeAdminApp() without args is the most reliable way in Cloud Run/Compute Engine 
+    // to pick up Application Default Credentials (ADC).
+    initializeAdminApp();
+  }
+} catch (e) {
+  console.error("❌ Admin SDK Initialization Error:", e);
+}
 
+// We rely on the Admin SDK for background workers to bypass security rules.
+// If the named database fails, we'll log it but we must use it if that's where the data is.
 const firestore = getAdminFirestore(firebaseConfig.firestoreDatabaseId);
 
-console.log(`📡 Initializing Firestore (Admin & Client) with DB ID: "${firebaseConfig.firestoreDatabaseId}"`);
+console.log(`📡 Initializing Firestore Admin SDK with DB ID: "${firebaseConfig.firestoreDatabaseId || '(default)'}"`);
+
+let isAdminFirestoreHealthy = false;
 
 // Verify Firestore connectivity
 (async () => {
-  // Check Admin SDK
   try {
-    await firestore.collection('_system').doc('health').get();
-    console.log(`✅ Firestore Admin SDK: Connected to "${firebaseConfig.firestoreDatabaseId}"`);
+    // Try a simple read or list to check health
+    await firestore.collection('_system').get();
+    console.log(`✅ Firestore Admin SDK: Connected to "${firebaseConfig.firestoreDatabaseId || '(default)'}"`);
+    isAdminFirestoreHealthy = true;
   } catch (err: any) {
-    console.error(`⚠️ Firestore Admin SDK: Permission Denied (Project: ${firebaseConfig.projectId}). Using Client SDK fallback for background workers.`);
+    console.error(`⚠️ Firestore Admin SDK: Connection check failed for DB "${firebaseConfig.firestoreDatabaseId}". Error: ${err.message}`);
+    isAdminFirestoreHealthy = false;
+    
+    if (err.message.includes('permission') || err.message.includes('PERMISSION_DENIED')) {
+      console.error("👉 This usually means the service account lacks 'Cloud Datastore User' permissions or the Firebase Terms of Service haven't been accepted.");
+    }
   }
 
-  // Check Client SDK
   try {
     const healthRef = clientDoc(clientFirestore, '_system', 'health');
     await clientGetDoc(healthRef);
@@ -140,18 +154,18 @@ function handleCronError(label: string, err: any) {
 // Background cleanup worker (every hour)
 cron.schedule('0 * * * *', async () => {
   try {
+    if (!isAdminFirestoreHealthy) return;
     console.log("Running hourly cleanup...");
     const oneHourAgo = new Date(Date.now() - 3600000);
     
-    const q = clientQuery(
-      clientCollection(clientFirestore, 'devices'),
-      clientWhere('status', '==', 'online'),
-      clientWhere('lastSeen', '<', oneHourAgo)
-    );
-    const offlineSnap = await clientGetDocs(q);
+    // Always prefer Admin SDK for background tasks to bypass security rules
+    const offlineSnap = await firestore.collection('devices')
+      .where('status', '==', 'online')
+      .where('lastSeen', '<', Timestamp.fromDate(oneHourAgo))
+      .get();
       
     if (!offlineSnap.empty) {
-      const batch = clientWriteBatch(clientFirestore);
+      const batch = firestore.batch();
       offlineSnap.forEach(docSnapshot => {
         batch.update(docSnapshot.ref, { status: 'offline' });
       });
@@ -166,8 +180,10 @@ cron.schedule('0 * * * *', async () => {
 // SNMP Polling worker (every minute)
 cron.schedule("* * * * *", async () => {
   try {
-    const q = clientQuery(clientCollection(clientFirestore, 'snmp_devices'), clientWhere('enabled', '==', true));
-    const devicesSnap = await clientGetDocs(q);
+    if (!isAdminFirestoreHealthy) return;
+    const devicesSnap = await firestore.collection('snmp_devices')
+      .where('enabled', '==', true)
+      .get();
       
     for (const docSnapshot of devicesSnap.docs) {
       const device = docSnapshot.data();
@@ -175,19 +191,17 @@ cron.schedule("* * * * *", async () => {
       const intervalMs = (device.pollingInterval || 300) * 1000;
       
       if (Date.now() - lastPolled.getTime() >= intervalMs) {
-        const agentQ = clientQuery(
-          clientCollection(clientFirestore, 'devices'),
-          clientWhere('userId', '==', device.userId),
-          clientWhere('status', '==', 'online'),
-          clientLimit(1)
-        );
-        const agentSnap = await clientGetDocs(agentQ);
+        const agentSnap = await firestore.collection('devices')
+          .where('userId', '==', device.userId)
+          .where('status', '==', 'online')
+          .limit(1)
+          .get();
           
         if (!agentSnap.empty) {
           const agentId = agentSnap.docs[0].id;
           const config = JSON.parse(snmpDecrypt(device.encryptedConfig));
           
-          await clientAddDoc(clientCollection(clientFirestore, 'commands'), {
+          await firestore.collection('commands').add({
             deviceId: agentId,
             userId: device.userId,
             commandType: 'snmp_poll',
@@ -201,10 +215,12 @@ cron.schedule("* * * * *", async () => {
               oids: device.oids || [],
             }),
             status: 'pending',
-            createdAt: clientServerTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
           });
           
-          await clientUpdateDoc(docSnapshot.ref, { lastPolledAt: clientServerTimestamp() });
+          await firestore.collection('snmp_devices').doc(docSnapshot.id).update({ 
+            lastPolledAt: FieldValue.serverTimestamp() 
+          });
         }
       }
     }
@@ -280,6 +296,160 @@ function rowsToCsv(headers: string[], rows: (string | number | null)[][]): strin
 async function isUserAppAdmin(uid: string): Promise<boolean> {
   const userDoc = await firestore.collection('users').doc(uid).get();
   return userDoc.data()?.role === 'admin';
+}
+
+// ===== SNMP Polling Helper =====
+
+async function queueSnmpPoll(snmpDeviceId: string, device: any) {
+  const agentQ = clientQuery(
+    clientCollection(clientFirestore, 'devices'),
+    clientWhere('userId', '==', device.userId),
+    clientWhere('status', '==', 'online'),
+    clientLimit(1)
+  );
+  const agentSnap = await clientGetDocs(agentQ);
+    
+  if (!agentSnap.empty) {
+    const agentId = agentSnap.docs[0].id;
+    const config = JSON.parse(snmpDecrypt(device.encryptedConfig));
+    
+    await clientAddDoc(clientCollection(clientFirestore, 'commands'), {
+      deviceId: agentId,
+      userId: device.userId,
+      commandType: 'snmp_poll',
+      payload: JSON.stringify({
+        snmpDeviceId: snmpDeviceId,
+        host: device.host,
+        port: device.port || 161,
+        version: device.version || 'v2c',
+        community: config.community,
+        v3Config: config.v3Config,
+        oids: device.oids || [],
+      }),
+      status: 'pending',
+      createdAt: clientServerTimestamp(),
+    });
+    
+    // We update via admin SDK if possible for consistency
+    await firestore.collection('snmp_devices').doc(snmpDeviceId).update({ 
+      lastPolledAt: FieldValue.serverTimestamp() 
+    });
+  }
+}
+
+// ===== Automation Profiles =====
+
+function computeNextExecution(schedules: any[]): Timestamp | null {
+  if (!schedules || schedules.length === 0) return null;
+  const now = new Date();
+  let nextDate: Date | null = null;
+  for (const s of schedules) {
+    let candidate: Date | null = null;
+    if (s.type === 'one_time' && s.oneTimeDate) {
+      candidate = new Date(s.oneTimeDate);
+      if (candidate <= now) continue;
+    } else if (s.type === 'weekly' && s.weeklyDays && s.weeklyTime) {
+      const [hh, mm] = s.weeklyTime.split(':').map(Number);
+      for (let i = 0; i < 8; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() + i);
+        d.setHours(hh, mm, 0, 0);
+        if (d > now && s.weeklyDays.includes(d.getDay())) { candidate = d; break; }
+      }
+    } else if (s.type === 'monthly' && s.monthlyDayOfMonth && s.monthlyTime) {
+      const [hh, mm] = s.monthlyTime.split(':').map(Number);
+      const d = new Date(now.getFullYear(), now.getMonth(), s.monthlyDayOfMonth, hh, mm);
+      if (d <= now) d.setMonth(d.getMonth() + 1);
+      candidate = d;
+    }
+    if (candidate && (!nextDate || candidate < nextDate)) nextDate = candidate;
+  }
+  return nextDate ? Timestamp.fromDate(nextDate) : null;
+}
+
+async function queueAutomationProfile(profileId: string, profile: any, immediate: boolean) {
+  const deviceIds = new Set<string>(profile.assignedTo?.deviceIds || []);
+  
+  // Helper to run query via Admin or Client
+  const getDevices = async (field: string, values: string[]) => {
+    try {
+      const snap = await firestore.collection('devices')
+        .where('userId', '==', profile.userId)
+        .where(field, 'in', values.slice(0, 10)).get();
+      return snap.docs;
+    } catch (e) {
+      // Fallback to client if Admin fails
+      const q = clientQuery(
+        clientCollection(clientFirestore, 'devices'),
+        clientWhere('userId', '==', profile.userId),
+        clientWhere(field, 'in', values.slice(0, 10))
+      );
+      const snap = await clientGetDocs(q);
+      return snap.docs;
+    }
+  };
+
+  if (profile.assignedTo?.folderIds?.length) {
+    const docs = await getDevices('folderId', profile.assignedTo.folderIds);
+    docs.forEach(d => deviceIds.add(d.id));
+  }
+  if (profile.assignedTo?.siteIds?.length) {
+    const docs = await getDevices('siteId', profile.assignedTo.siteIds);
+    docs.forEach(d => deviceIds.add(d.id));
+  }
+
+  for (const deviceId of deviceIds) {
+    try {
+      const execRef = await firestore.collection('automation_executions').add({
+        userId: profile.userId, profileId, deviceId,
+        status: 'running', startedAt: FieldValue.serverTimestamp(),
+        completedAt: null, tasksCompleted: [], tasksFailed: [], output: '',
+      });
+      await firestore.collection('commands').add({
+        deviceId, userId: profile.userId,
+        commandType: 'run_automation_profile',
+        payload: JSON.stringify({ executionId: execRef.id, tasks: profile.tasks }),
+        status: 'pending', createdAt: FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      // Fallback to client
+      try {
+        const execRef = await clientAddDoc(clientCollection(clientFirestore, 'automation_executions'), {
+          userId: profile.userId, profileId, deviceId,
+          status: 'running', startedAt: clientServerTimestamp(),
+          completedAt: null, tasksCompleted: [], tasksFailed: [], output: '',
+        });
+        await clientAddDoc(clientCollection(clientFirestore, 'commands'), {
+          deviceId, userId: profile.userId,
+          commandType: 'run_automation_profile',
+          payload: JSON.stringify({ executionId: execRef.id, tasks: profile.tasks }),
+          status: 'pending', createdAt: clientServerTimestamp(),
+        });
+      } catch (inner) {
+        console.error("Queue automation failed on both Admin and Client:", inner);
+      }
+    }
+  }
+
+  if (!immediate) {
+    const updates = {
+      lastExecution: FieldValue.serverTimestamp(),
+      nextExecution: computeNextExecution(profile.schedules || []),
+    };
+    try {
+      await firestore.collection('automation_profiles').doc(profileId).update(updates);
+    } catch (e) {
+      try {
+        const docRef = clientDoc(clientFirestore, 'automation_profiles', profileId);
+        await clientUpdateDoc(docRef, {
+          lastExecution: clientServerTimestamp(),
+          nextExecution: computeNextExecution(profile.schedules || []),
+        });
+      } catch (inner) {
+        console.error("Update profile failed on both Admin and Client:", inner);
+      }
+    }
+  }
 }
 
 async function startServer() {
@@ -378,8 +548,6 @@ async function startServer() {
   });
 
   // Agent download redirects
-  const AGENT_RELEASES_BASE = process.env.AGENT_RELEASE_URL_BASE || "https://github.com/JessiJC44/HypeRMM/releases/latest/download";
-
   const handleAgentDownload = (req: express.Request, res: express.Response, binaryName: string) => {
     // FORCE PRODUCTION REDIRECTS - The Go binaries are hosted in the GitHub releases
     const downloadUrl = `${AGENT_RELEASES_BASE}/${binaryName}`;
@@ -516,6 +684,46 @@ async function startServer() {
         source: "command",
         createdAt: FieldValue.serverTimestamp(),
       });
+
+      // Handle auto-healing alert resolution
+      try {
+        const cmd = commandDoc.data();
+        if (cmd) {
+          let payloadObj: any = {};
+          try { payloadObj = JSON.parse(cmd.payload || '{}'); } catch {}
+          if (payloadObj.alertId && payloadObj.autoHealing) {
+            const alertRef = firestore.collection('alerts').doc(payloadObj.alertId);
+            const alertDoc = await alertRef.get();
+            if (alertDoc.exists) {
+              const thresholdId = alertDoc.data()?.thresholdId || '';
+              const thresholdDoc = await firestore.collection('device_thresholds').doc(thresholdId).get();
+              const threshold = thresholdDoc.data();
+
+              const chain = await firestore.collection('commands')
+                .where('userId', '==', cmd.userId)
+                .where('deviceId', '==', cmd.deviceId).get();
+              
+              const healingCmds = chain.docs.filter((d: any) => {
+                try { return JSON.parse(d.data().payload || '{}').alertId === payloadObj.alertId; } catch { return false; }
+              });
+
+              // Check if all commands in this healing chain are done
+              const allDone = healingCmds.every((c: any) => c.data().status === 'completed' || c.data().status === 'failed');
+              if (allDone) {
+                const allSucceeded = healingCmds.every((c: any) => c.data().status === 'completed' && (c.data().exitCode === 0 || c.data().exitCode === undefined));
+                const output = healingCmds.map((c: any, i: number) => `=== Script ${i+1} ===\n${c.data().result || ''}`).join('\n\n');
+                const updates: any = { autoHealingRan: true, autoHealingResult: output };
+                if (allSucceeded && threshold?.autoResolveOnHeal) {
+                  updates.status = 'resolved';
+                  updates.resolvedAt = FieldValue.serverTimestamp();
+                  updates.resolvedBy = 'auto-healing';
+                }
+                await alertRef.update(updates);
+              }
+            }
+          }
+        }
+      } catch (e) { console.error('Auto-healing wiring error:', e); }
 
       res.json({ status: "ok" });
     } catch (error) {
@@ -1306,6 +1514,171 @@ async function startServer() {
     }
   });
 
+  // ===== Automation Profiles =====
+
+  app.get("/api/automation/profiles", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const snap = await firestore.collection('automation_profiles')
+        .where('userId', '==', req.user.uid).orderBy('name').get();
+      res.json(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+  });
+
+  app.post("/api/automation/profiles", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { name, description, active, tasks, schedules, timezone, offlineExecution, notifyEmails, assignedTo } = req.body;
+      if (!name) return res.status(400).json({ error: "name required" });
+      const ref = await firestore.collection('automation_profiles').add({
+        userId: req.user.uid, name, description: description || '',
+        active: active !== false, tasks: tasks || {},
+        schedules: schedules || [], timezone: timezone || 'account',
+        offlineExecution: offlineExecution || 'online_only',
+        notifyEmails: notifyEmails || [],
+        assignedTo: assignedTo || { siteIds: [], folderIds: [], deviceIds: [] },
+        nextExecution: computeNextExecution(schedules || []),
+        lastExecution: null,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      res.json({ id: ref.id });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+  });
+
+  app.get("/api/automation/profiles/:id", verifyFirebaseToken, async (req: any, res) => {
+    const doc = await firestore.collection('automation_profiles').doc(req.params.id).get();
+    if (!doc.exists || doc.data()?.userId !== req.user.uid) return res.status(404).json({ error: "Not found" });
+    res.json({ id: doc.id, ...doc.data() });
+  });
+
+  app.patch("/api/automation/profiles/:id", verifyFirebaseToken, async (req: any, res) => {
+    const doc = await firestore.collection('automation_profiles').doc(req.params.id).get();
+    if (!doc.exists || doc.data()?.userId !== req.user.uid) return res.status(404).json({ error: "Not found" });
+    const updates: any = { ...req.body, updatedAt: FieldValue.serverTimestamp() };
+    delete updates.id; delete updates.userId; delete updates.createdAt;
+    if (updates.schedules) updates.nextExecution = computeNextExecution(updates.schedules);
+    await doc.ref.update(updates);
+    res.json({ ok: true });
+  });
+
+  app.delete("/api/automation/profiles/:id", verifyFirebaseToken, async (req: any, res) => {
+    const doc = await firestore.collection('automation_profiles').doc(req.params.id).get();
+    if (!doc.exists || doc.data()?.userId !== req.user.uid) return res.status(404).json({ error: "Not found" });
+    await doc.ref.delete();
+    res.json({ ok: true });
+  });
+
+  app.post("/api/automation/profiles/:id/run-now", verifyFirebaseToken, async (req: any, res) => {
+    const doc = await firestore.collection('automation_profiles').doc(req.params.id).get();
+    if (!doc.exists || doc.data()?.userId !== req.user.uid) return res.status(404).json({ error: "Not found" });
+    await queueAutomationProfile(doc.id, doc.data(), true);
+    res.json({ ok: true });
+  });
+
+  app.get("/api/automation/executions", verifyFirebaseToken, async (req: any, res) => {
+    const snap = await firestore.collection('automation_executions')
+      .where('userId', '==', req.user.uid)
+      .orderBy('startedAt', 'desc').limit(50).get();
+    res.json(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+  });
+
+  app.post("/api/agent/automation-result", verifyAgentJWT, async (req: any, res) => {
+    try {
+      const { executionId, status, tasksCompleted, tasksFailed, output } = req.body;
+      if (!executionId) return res.status(400).json({ error: "executionId required" });
+      await firestore.collection('automation_executions').doc(executionId).update({
+        status, tasksCompleted, tasksFailed, output,
+        completedAt: FieldValue.serverTimestamp(),
+      });
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+  });
+
+  // ===== SNMP Endpoints =====
+
+  app.delete("/api/snmp/devices/:id", verifyFirebaseToken, async (req: any, res) => {
+    const doc = await firestore.collection('snmp_devices').doc(req.params.id).get();
+    if (!doc.exists || doc.data()?.userId !== req.user.uid) return res.status(404).json({ error: "Not found" });
+    await doc.ref.delete();
+    res.json({ ok: true });
+  });
+
+  app.post("/api/snmp/devices/:id/poll-now", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const doc = await firestore.collection('snmp_devices').doc(req.params.id).get();
+      if (!doc.exists || doc.data()?.userId !== req.user.uid) return res.status(404).json({ error: "Not found" });
+      await queueSnmpPoll(doc.id, doc.data());
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+  });
+
+  app.get("/api/snmp/templates", verifyFirebaseToken, async (req: any, res) => {
+    const snap = await firestore.collection('snmp_templates').where('userId', '==', req.user.uid).orderBy('name').get();
+    res.json(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+  });
+
+  app.post("/api/snmp/templates", verifyFirebaseToken, async (req: any, res) => {
+    const { name, deviceType, description, tags, oids } = req.body;
+    if (!name || !deviceType) return res.status(400).json({ error: "name and deviceType required" });
+    const ref = await firestore.collection('snmp_templates').add({
+      userId: req.user.uid, name, deviceType,
+      description: description || '', tags: tags || [], oids: oids || [],
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ id: ref.id });
+  });
+
+  app.patch("/api/snmp/templates/:id", verifyFirebaseToken, async (req: any, res) => {
+    const doc = await firestore.collection('snmp_templates').doc(req.params.id).get();
+    if (!doc.exists || doc.data()?.userId !== req.user.uid) return res.status(404).json({ error: "Not found" });
+    const updates: any = { ...req.body, updatedAt: FieldValue.serverTimestamp() };
+    delete updates.id; delete updates.userId; delete updates.createdAt;
+    await doc.ref.update(updates);
+    res.json({ ok: true });
+  });
+
+  app.delete("/api/snmp/templates/:id", verifyFirebaseToken, async (req: any, res) => {
+    const doc = await firestore.collection('snmp_templates').doc(req.params.id).get();
+    if (!doc.exists || doc.data()?.userId !== req.user.uid) return res.status(404).json({ error: "Not found" });
+    await doc.ref.delete();
+    res.json({ ok: true });
+  });
+
+  app.post("/api/snmp/ai-suggest-oid", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const { description, deviceType } = req.body;
+      const { generateAIResponse } = await import('./src/services/aiService');
+      const prompt = `Suggest the most appropriate SNMP OID for this need: ${description} on a ${deviceType}. Return ONLY a JSON object with fields: oid, name, description, valueType ('integer'|'gauge'|'counter'|'string'|'percentage'), unit (string or null). No markdown.`;
+      const result = await generateAIResponse(prompt, 'You are an expert in SNMP monitoring.');
+      const cleaned = result.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+      res.json(JSON.parse(cleaned));
+    } catch (e) { res.status(500).json({ error: (e as Error).message }); }
+  });
+
+  app.post("/api/alerts/:id/rerun-healing", verifyFirebaseToken, async (req: any, res) => {
+    try {
+      const alertDoc = await firestore.collection('alerts').doc(req.params.id).get();
+      if (!alertDoc.exists || alertDoc.data()?.userId !== req.user.uid) return res.status(404).json({ error: "Not found" });
+      const threshold = (await firestore.collection('device_thresholds').doc(alertDoc.data()?.thresholdId || '').get()).data();
+      if (!threshold?.autoHealingScriptIds?.length) return res.status(400).json({ error: "No healing scripts configured" });
+
+      for (const scriptId of threshold.autoHealingScriptIds) {
+        const scriptDoc = await firestore.collection('scripts').doc(scriptId).get();
+        if (!scriptDoc.exists) continue;
+        await firestore.collection('commands').add({
+          deviceId: alertDoc.data()?.deviceId, userId: req.user.uid,
+          commandType: 'run_script',
+          payload: JSON.stringify({
+            content: scriptDoc.data()?.content, variables: {},
+            alertId: req.params.id, autoHealing: true,
+          }),
+          status: 'pending', createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+      await alertDoc.ref.update({ autoHealingRan: false, autoHealingResult: null });
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+  });
+
   app.get("/api/network/scans/:scanId", verifyFirebaseToken, async (req: any, res) => {
     try {
       const { uid } = req.user;
@@ -1621,12 +1994,63 @@ async function startServer() {
     });
   }
 
+  // Cron: run due automation profiles every minute
+  cron.schedule('* * * * *', async () => {
+    try {
+      if (!isAdminFirestoreHealthy) return; // Skip if we can't talk to DB
+      
+      const now = Timestamp.now();
+      let dueDocs: any[] = [];
+      
+      try {
+        const snap = await firestore.collection('automation_profiles')
+          .where('active', '==', true)
+          .where('nextExecution', '<=', now)
+          .get();
+        dueDocs = snap.docs;
+      } catch (err: any) {
+        const errMsg = err.message || '';
+        if (errMsg.includes('index') || errMsg.includes('PERMISSION_DENIED') || errMsg.includes('permission')) {
+          try {
+            const snap = await firestore.collection('automation_profiles')
+              .where('active', '==', true)
+              .get();
+            dueDocs = snap.docs.filter(d => {
+              const data = d.data();
+              if (!data.nextExecution) return false;
+              const nextExec = data.nextExecution.toDate ? data.nextExecution.toDate() : new Date(data.nextExecution);
+              return nextExec <= now.toDate();
+            });
+          } catch (fallbackErr: any) {
+            console.error('Automation cron fallback failed:', fallbackErr.message);
+          }
+        } else {
+          throw err;
+        }
+      }
+
+      if (dueDocs.length > 0) {
+        console.log(`🤖 Automation Cron: Found ${dueDocs.length} due profiles.`);
+        for (const doc of dueDocs) {
+          try {
+            await queueAutomationProfile(doc.id, doc.data(), false);
+          } catch (queueErr: any) {
+            console.error(`Failed to queue profile ${doc.id}:`, queueErr.message);
+          }
+        }
+      }
+    } catch (e: any) { 
+      console.error('Automation cron error:', e.message);
+    }
+  });
+
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 
   // Cleanup old heartbeats (30 days)
   cron.schedule('0 0 * * *', async () => {
+    if (!isAdminFirestoreHealthy) return;
     console.log('🧹 Cleaning up old heartbeats...');
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const snapshot = await firestore.collection('device_heartbeats')
@@ -1642,11 +2066,9 @@ async function startServer() {
   // Seed Catalog
   const seedCatalog = async () => {
     try {
-      const q = clientQuery(clientCollection(clientFirestore, "software_catalog"), clientWhere('isBuiltIn', '==', true));
-      const snap = await clientGetDocs(q);
+      const snap = await firestore.collection('software_catalog').where('isBuiltIn', '==', true).get();
       if (!snap.empty) return;
 
-      const AGENT_RELEASES_BASE = process.env.AGENT_RELEASE_URL_BASE || "https://github.com/JessiJC44/HypeRMM/releases/latest/download";
       const apps = [
         {
           name: 'Flux', category: 'Remote Access', developer: 'HypeRemote',

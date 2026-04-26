@@ -990,20 +990,127 @@ func postSnmpResult(snmpDeviceId string, values map[string]interface{}, errMsg s
 }
 
 func executeAutomationProfile(payload string) (string, error) {
-	var data struct {
-		Tasks map[string]interface{} `json:"tasks"`
-	}
-	json.Unmarshal([]byte(payload), &data)
+    var data struct {
+        ExecutionID string                 `json:"executionId"`
+        Tasks       map[string]interface{} `json:"tasks"`
+    }
+    if err := json.Unmarshal([]byte(payload), &data); err != nil {
+        return "", err
+    }
 
-	var results []string
-	// Basic cleanup task
-	if runtime.GOOS == "windows" {
-		out, _ := exec.Command("powershell", "-Command", "Remove-Item $env:TEMP\\* -Recurse -Force -ErrorAction SilentlyContinue").CombinedOutput()
-		results = append(results, "Temp Cleanup: "+string(out))
-	} else {
-		out, _ := exec.Command("bash", "-c", "rm -rf /tmp/*").CombinedOutput()
-		results = append(results, "Temp Cleanup: "+string(out))
-	}
+    var sb strings.Builder
+    tasksCompleted := []string{}
+    tasksFailed := []string{}
 
-	return strings.Join(results, "\n"), nil
+    runTask := func(name, cmd string) {
+        sb.WriteString(fmt.Sprintf("\n=== %s ===\n", name))
+        var c *exec.Cmd
+        if runtime.GOOS == "windows" {
+            c = exec.Command("powershell", "-NoProfile", "-Command", cmd)
+        } else {
+            c = exec.Command("bash", "-c", cmd)
+        }
+        c.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
+        out, err := c.CombinedOutput()
+        sb.Write(out)
+        if err != nil {
+            sb.WriteString(fmt.Sprintf("\nERROR: %v\n", err))
+            tasksFailed = append(tasksFailed, name)
+        } else {
+            tasksCompleted = append(tasksCompleted, name)
+        }
+    }
+
+    osType := runtime.GOOS
+
+    if win, ok := data.Tasks["windows"].(map[string]interface{}); ok && osType == "windows" {
+        if p, ok := win["patches"].(map[string]interface{}); ok {
+            if v, _ := p["critical"].(bool); v {
+                runTask("Windows Patches", "Install-Module PSWindowsUpdate -Force -Scope CurrentUser -ErrorAction SilentlyContinue; Import-Module PSWindowsUpdate -ErrorAction SilentlyContinue; Install-WindowsUpdate -AcceptAll -AutoReboot:$false -MicrosoftUpdate -ErrorAction SilentlyContinue")
+            }
+        }
+        if w, ok := win["winget"].(map[string]interface{}); ok {
+            if v, _ := w["updateAllSoftware"].(bool); v {
+                runTask("WinGet Upgrade", "winget upgrade --all --silent --accept-source-agreements --accept-package-agreements")
+            }
+        }
+        if c, ok := win["chocolatey"].(map[string]interface{}); ok {
+            if v, _ := c["updateAllSoftware"].(bool); v {
+                runTask("Chocolatey Upgrade", "choco upgrade all -y")
+            }
+        }
+    }
+
+    if mac, ok := data.Tasks["mac"].(map[string]interface{}); ok && osType == "darwin" {
+        if v, _ := mac["recommended"].(bool); v {
+            runTask("macOS Software Update", "softwareupdate -i -a")
+        }
+        if b, ok := mac["homebrew"].(map[string]interface{}); ok {
+            if v, _ := b["updateAllSoftware"].(bool); v {
+                runTask("Homebrew Upgrade", "brew update && brew upgrade && brew upgrade --cask")
+            }
+        }
+    }
+
+    if lin, ok := data.Tasks["linux"].(map[string]interface{}); ok && osType == "linux" {
+        if v, _ := lin["upgradePackages"].(bool); v {
+            runTask("Linux Upgrade", "(apt-get update && apt-get -y upgrade) || (yum -y update) || (dnf -y upgrade) || true")
+        }
+    }
+
+    if disk, ok := data.Tasks["diskManagement"].(map[string]interface{}); ok {
+        if v, _ := disk["defrag"].(bool); v && osType == "windows" {
+            runTask("Disk Defrag", "Optimize-Volume -DriveLetter C -Defrag")
+        }
+    }
+
+    if maint, ok := data.Tasks["maintenance"].(map[string]interface{}); ok {
+        if v, _ := maint["deleteTempFiles"].(bool); v {
+            if osType == "windows" {
+                runTask("Temp Cleanup", "Remove-Item $env:TEMP\\* -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item C:\\Windows\\Temp\\* -Recurse -Force -ErrorAction SilentlyContinue")
+            } else {
+                runTask("Temp Cleanup", "find /tmp -type f -atime +7 -delete 2>/dev/null; true")
+            }
+        }
+        if v, _ := maint["reboot"].(bool); v {
+            if osType == "windows" {
+                runTask("Reboot (60s delay)", "shutdown /r /t 60 /c \"HypeRemote automation\"")
+            } else {
+                runTask("Reboot (60s delay)", "shutdown -r +1 'HypeRemote automation'")
+            }
+        } else if v, _ := maint["shutdown"].(bool); v {
+            if osType == "windows" {
+                runTask("Shutdown (60s delay)", "shutdown /s /t 60 /c \"HypeRemote automation\"")
+            } else {
+                runTask("Shutdown (60s delay)", "shutdown -h +1 'HypeRemote automation'")
+            }
+        }
+    }
+
+    status := "success"
+    if len(tasksFailed) > 0 && len(tasksCompleted) > 0 {
+        status = "partial"
+    } else if len(tasksFailed) > 0 {
+        status = "failed"
+    }
+
+    postAutomationResult(data.ExecutionID, status, tasksCompleted, tasksFailed, sb.String())
+    return fmt.Sprintf("Automation: %d completed, %d failed", len(tasksCompleted), len(tasksFailed)), nil
+}
+
+func postAutomationResult(executionID, status string, completed, failed []string, output string) {
+    if executionID == "" {
+        return
+    }
+    body, _ := json.Marshal(map[string]interface{}{
+        "executionId":    executionID,
+        "status":         status,
+        "tasksCompleted": completed,
+        "tasksFailed":    failed,
+        "output":         output,
+    })
+    req, _ := http.NewRequest("POST", config.ServerURL+"/api/agent/automation-result", bytes.NewReader(body))
+    req.Header.Set("Authorization", "Bearer "+config.AgentJWT)
+    req.Header.Set("Content-Type", "application/json")
+    http.DefaultClient.Do(req)
 }

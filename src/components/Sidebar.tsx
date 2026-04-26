@@ -24,7 +24,9 @@ import {
   Menu,
   HelpCircle,
   Download,
-  FileCode2
+  FileCode2,
+  ShieldAlert,
+  Workflow
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from './Logo';
@@ -65,7 +67,9 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, onClose, user }: Side
     { id: 'sites', label: t('nav.sites'), icon: Globe, description: t('nav.desc_sites') },
     { id: 'assets', label: t('nav.assets'), icon: Monitor, description: t('nav.desc_assets') },
     { id: 'alerts', label: t('nav.alerts'), icon: Bell, description: t('nav.desc_alerts'), badge: alertCount > 0 ? alertCount.toString() : undefined },
+    { id: 'thresholds', label: 'Thresholds', icon: ShieldAlert, description: 'Monitoring thresholds and auto-healing.' },
     { id: 'patches', label: t('nav.patches'), icon: ShieldCheck, description: t('nav.desc_patches') },
+    { id: 'automation', label: 'Automation', icon: Workflow, description: 'Scheduled automation profiles.' },
     { id: 'scripts', label: t('nav.scripts'), icon: FileCode2, description: t('nav.desc_scripts') },
     { id: 'software', label: t('nav.software'), icon: Package, description: t('nav.desc_software') },
     { id: 'app-center', label: t('nav.app-center'), icon: AppWindow, description: t('nav.desc_app_center') },

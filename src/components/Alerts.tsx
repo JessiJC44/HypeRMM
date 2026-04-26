@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Bell, AlertTriangle, Info, CheckCircle2, Search, Filter, MoreVertical, Ticket, Check } from 'lucide-react';
+import { Bell, AlertTriangle, Info, CheckCircle2, Search, Filter, MoreVertical, Ticket, Check, Zap, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -204,7 +204,34 @@ export function Alerts() {
                     </Badge>
                   </td>
                   <td className="py-5 px-8 font-bold text-foreground whitespace-nowrap">{alert.deviceName}</td>
-                  <td className="py-5 px-8 text-muted-foreground font-bold whitespace-nowrap">{alert.message}</td>
+                  <td className="py-5 px-8 text-muted-foreground font-bold">
+                    <div>{alert.message}</div>
+                    {(alert as any).autoHealingRan && (
+                      <div className="mt-4 p-4 rounded-lg border border-border bg-muted/30">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Zap size={14} className="text-amber-500" />
+                            <span className="text-[10px] font-black uppercase tracking-wider">Auto-healing</span>
+                            {(alert as any).resolvedBy === 'auto-healing' && (
+                              <Badge className="bg-emerald-500/10 text-emerald-600 text-[10px] font-black uppercase border-none">Auto-resolved</Badge>
+                            )}
+                          </div>
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px] font-black uppercase tracking-widest gap-1" onClick={async () => {
+                            const user = auth.currentUser;
+                            const token = await user?.getIdToken();
+                            await fetch(`/api/alerts/${alert.id}/rerun-healing`, {
+                              method: 'POST',
+                              headers: { Authorization: `Bearer ${token}` },
+                            });
+                            toast.success('Auto-healing re-queued');
+                          }}>
+                            <RefreshCw size={12} /> Re-run
+                          </Button>
+                        </div>
+                        <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto bg-black/20 p-2 rounded border border-border/50">{(alert as any).autoHealingResult || 'No output'}</pre>
+                      </div>
+                    )}
+                  </td>
                   <td className="py-5 px-8 text-muted-foreground font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
                     {new Date(alert.timestamp).toLocaleString()}
                   </td>

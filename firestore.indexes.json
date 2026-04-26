@@ -131,6 +131,14 @@
         { "fieldPath": "deviceId", "order": "ASCENDING" },
         { "fieldPath": "name", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "automation_profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "active", "order": "ASCENDING" },
+        { "fieldPath": "nextExecution", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
